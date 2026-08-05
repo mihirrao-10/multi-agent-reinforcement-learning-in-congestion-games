@@ -1,0 +1,5 @@
+dist
+node_modules
+public/data/story-v1.json
+playwright-report
+test-results

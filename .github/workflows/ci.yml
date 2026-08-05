@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python 3.12
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install package and development dependencies
+        run: python -m pip install ".[dev]"
+
+      - name: Check formatting
+        run: ruff format --check .
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Check strict types
+        run: mypy
+
+      - name: Run tests with coverage
+        run: pytest
+
+      - name: Scan visible prose
+        run: pytest tests/test_visible_prose.py -q --no-cov
+
+      - name: Run canonical exact enumeration
+        run: |
+          congestion-marl enumerate --scenario braess-open --json
+          congestion-marl enumerate --scenario braess-closed --json
+          congestion-marl enumerate --scenario braess-tolled --json
+
+      - name: Reproduce and validate deterministic story data
+        run: |
+          congestion-marl export --output "${RUNNER_TEMP}/story-v1.json"
+          congestion-marl validate "${RUNNER_TEMP}/story-v1.json"
+          cmp "${RUNNER_TEMP}/story-v1.json" web/public/data/story-v1.json
+
+  web:
+    name: Web and Chromium
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install locked dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Check formatting
+        working-directory: web
+        run: npm run format:check
+
+      - name: Lint
+        working-directory: web
+        run: npm run lint
+
+      - name: Run unit and numerical consistency tests
+        working-directory: web
+        run: npm test
+
+      - name: Check TypeScript
+        working-directory: web
+        run: npx tsc --noEmit
+
+      - name: Check internal links and assets
+        working-directory: web
+        run: npm run check:links
+
+      - name: Build production site
+        working-directory: web
+        run: npm run build
+
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser tests
+        working-directory: web
+        run: npm run test:e2e
+
+      - name: Upload browser diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            web/test-results
+            web/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14

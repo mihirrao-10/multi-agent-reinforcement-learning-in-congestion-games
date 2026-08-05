@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="An interactive study of eighty independent reinforcement-learning agents in an atomic Braess congestion game."
+    />
+    <meta property="og:title" content="When Every Agent Finds the Shortcut" />
+    <meta
+      property="og:description"
+      content="Eighty independent learners discover the same zero-cost link. The network gets slower."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="./og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #000;
+        color: #d7d7d7;
+      }
+    </style>
+    <title>When Every Agent Finds the Shortcut</title>
+  </head>
+  <body data-story-ready="false" data-webgl="pending">
+    <a class="skip-link" href="#story">Skip to the story</a>
+    <div id="loading" class="loading-screen" role="status" aria-live="polite">
+      <span class="loading-mark" aria-hidden="true"></span>
+      <span>Preparing the exact experiment.</span>
+    </div>
+
+    <main id="story">
+      <div class="story-layout">
+        <aside
+          class="visual-column"
+          aria-label="Persistent experiment visualization"
+        >
+          <figure class="stage" id="stage" data-scene-mode="network">
+            <div class="canvas-frame" id="canvas-frame">
+              <canvas
+                id="congestion-canvas"
+                tabindex="0"
+                aria-label="Three-dimensional Braess network with eighty learning agents"
+              ></canvas>
+              <div
+                id="projected-labels"
+                class="projected-labels"
+                aria-hidden="true"
+              ></div>
+              <div id="webgl-fallback" class="webgl-fallback" hidden></div>
+            </div>
+
+            <figcaption id="scene-caption" class="scene-caption">
+              Eighty agents are distributed across three complete routes.
+            </figcaption>
+
+            <dl class="stage-metrics" aria-label="Active exact snapshot">
+              <div>
+                <dt>episode</dt>
+                <dd id="metric-episode"></dd>
+              </div>
+              <div>
+                <dt>routes U / L / Z</dt>
+                <dd id="metric-routes"></dd>
+              </div>
+              <div>
+                <dt>average latency</dt>
+                <dd id="metric-latency"></dd>
+              </div>
+              <div>
+                <dt>exploitability</dt>
+                <dd id="metric-exploitability"></dd>
+              </div>
+            </dl>
+
+            <div class="stage-controls" aria-label="Visualization controls">
+              <div class="playback-controls">
+                <button id="play-pause" type="button" aria-pressed="false">
+                  Play learning
+                </button>
+                <button id="replay" type="button">Replay learning</button>
+              </div>
+              <div class="camera-controls">
+                <button id="explore-view" type="button" aria-pressed="false">
+                  Explore view
+                </button>
+                <button id="reset-view" type="button">Reset view</button>
+                <button id="focus-primary" type="button">Focus shortcut</button>
+                <button id="focus-secondary" type="button">
+                  Focus bottleneck
+                </button>
+              </div>
+            </div>
+
+            <p class="interaction-note">
+              Drag to orbit. Enter Explore view for trackpad orbit. Pinch or
+              scroll to zoom.
+            </p>
+            <ul class="network-legend" aria-label="Network visual encoding">
+              <li class="network-encoding">
+                <i class="legend-thickness"></i> thickness = edge load
+              </li>
+              <li class="network-encoding">
+                <i class="legend-hue"></i> hue = physical edge latency
+              </li>
+              <li class="network-encoding">
+                <i class="legend-particles"></i> density = number of agents
+              </li>
+              <li class="network-encoding">
+                <i class="legend-speed"></i> speed = relative travel time
+              </li>
+              <li class="landscape-encoding">
+                <i class="legend-surface"></i> height = normalized potential
+              </li>
+              <li class="landscape-encoding">
+                <i class="legend-path"></i> warm path = exact states
+              </li>
+              <li class="landscape-encoding">
+                <i class="legend-equilibrium"></i> diamond = equilibrium
+              </li>
+              <li class="landscape-encoding">
+                <i class="legend-optimum"></i> ring = physical optimum
+              </li>
+            </ul>
+            <p id="playback-status" class="sr-only" aria-live="polite"></p>
+            <p id="scene-description" class="sr-only">
+              The shortcut is open without tolls. The network shows a discrete
+              exported learning snapshot.
+            </p>
+          </figure>
+        </aside>
+
+        <article class="story-chapters" aria-label="Guided mathematical essay">
+          <section
+            class="chapter chapter-arrival is-active"
+            id="arrival"
+            data-story-act="0"
+          >
+            <div class="chapter-copy">
+              <p class="eyebrow">
+                Multi-Agent Reinforcement Learning in Congestion Games
+              </p>
+              <h1>When Every Agent Finds the Shortcut</h1>
+              <p class="hero-subtitle">
+                Eighty independent learners discover the same zero-cost link.
+                The network gets slower.
+              </p>
+              <p>
+                Every point of light is an independent agent. Each chooses one
+                complete route from source
+                <i>S</i> to destination <i>T</i>, receives the negative of its
+                travel cost as reward, and updates only the route value it just
+                used.
+              </p>
+              <p>
+                One link through the center has zero direct cost. It looks
+                irresistible. The experiment asks whether individual learning
+                can stabilize on a routing pattern that makes everyone worse
+                off.
+              </p>
+              <button id="begin-learning" class="primary-action" type="button">
+                Begin learning
+              </button>
+              <a class="scroll-cue" href="#route-action"
+                >Follow the learning process ↓</a
+              >
+            </div>
+          </section>
+
+          <section class="chapter" id="route-action" data-story-act="1">
+            <div class="chapter-copy">
+              <p class="chapter-number">I</p>
+              <h2>A route is an action</h2>
+              <p>
+                An action is not a turn at one junction. It is a complete
+                directed route. The Upper route uses
+                <span class="route-token route-upper">S → U → T</span>. The
+                Lower route uses
+                <span class="route-token route-lower">S → V → T</span>. The
+                Shortcut route uses
+                <span class="route-token route-shortcut">S → U → V → T</span>.
+              </p>
+              <p>
+                An edge load is the integer number of agents whose selected
+                routes contain that edge. An agent's route cost is the sum of
+                the physical latency functions on its edges. Reward is the
+                negative of perceived route cost, so a less costly trip produces
+                a higher reward.
+              </p>
+              <div
+                class="route-definitions"
+                aria-label="Exact route definitions"
+              >
+                <button type="button" data-route-focus="U">
+                  <span>Upper</span> S → U → T
+                </button>
+                <button type="button" data-route-focus="L">
+                  <span>Lower</span> S → V → T
+                </button>
+                <button type="button" data-route-focus="Z">
+                  <span>Shortcut</span> S → U → V → T
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="chapter" id="joint-reward" data-story-act="2">
+            <div class="chapter-copy">
+              <p class="chapter-number">II</p>
+              <h2>Everyone changes your reward</h2>
+              <p>
+                Let <i>x</i><sub>U</sub>, <i>x</i><sub>L</sub>, and <i>x</i
+                ><sub>Z</sub> be the exact route counts. Shortcut users touch
+                both congestion-sensitive edges, so they increase both loads.
+              </p>
+              <div
+                class="equation-group"
+                aria-label="Route load and cost equations"
+              >
+                <div data-math="\operatorname{load}_{SU}=x_U+x_Z"></div>
+                <div data-math="\operatorname{load}_{VT}=x_L+x_Z"></div>
+                <div data-math="J_U=(x_U+x_Z)/2+45"></div>
+                <div data-math="J_L=45+(x_L+x_Z)/2"></div>
+                <div data-math="J_Z=(x_U+x_Z)/2+(x_L+x_Z)/2"></div>
+              </div>
+              <p>
+                The central filament remains free and pale even when crowded.
+                The cost comes from sending its users through both variable
+                bottlenecks. Those outer edges thicken, heat toward red, and
+                slow the animated route cycles.
+              </p>
+            </div>
+          </section>
+
+          <section class="chapter" id="q-learning" data-story-act="3">
+            <div class="chapter-copy">
+              <p class="chapter-number">III</p>
+              <h2>Each agent learns alone</h2>
+              <p>
+                Agent <i>i</i> stores one tabular value for each available
+                route. All eighty agents select actions before any reward is
+                evaluated. Then each updates only the selected entry:
+              </p>
+              <div
+                class="equation-display"
+                data-math="Q_i(a_i)\leftarrow Q_i(a_i)+\alpha[r_i-Q_i(a_i)]"
+              ></div>
+              <p>
+                The canonical run uses α = 0.15 and an epsilon-greedy schedule
+                that decays from 0.80 to 0.01. There is no neural network
+                because there are only two or three complete route actions.
+              </p>
+              <p>
+                From one learner's perspective, the other seventy-nine agents
+                are part of the environment, and they are adapting too. That
+                makes the reward process nonstationary. The site reports
+                empirical stabilization in this finite potential game; it does
+                not transfer the classic single-agent convergence theorem
+                unchanged.
+              </p>
+              <div id="learning-chart" class="story-chart" tabindex="0"></div>
+              <div
+                id="route-share-chart"
+                class="story-chart compact-chart"
+                tabindex="0"
+              ></div>
+            </div>
+          </section>
+
+          <section class="chapter" id="potential" data-story-act="4">
+            <div class="chapter-copy">
+              <p class="chapter-number">IV</p>
+              <h2>The game has a hidden landscape</h2>
+              <p>
+                Every feasible count triple is one vertex in a triangular
+                lattice. Height shows Rosenthal's potential, not social cost.
+                For one unilateral route change, the player's cost change equals
+                the potential change exactly:
+              </p>
+              <div
+                class="equation-display"
+                data-math="\Phi(a_i',a_{-i})-\Phi(a)=J_i(a_i',a_{-i})-J_i(a)"
+              ></div>
+              <p>
+                A strict asynchronous best response therefore moves downhill by
+                exactly the same amount as the agent's cost improvement. The
+                warm path shows that finite improvement sequence. It ends
+                because no accepted move can revisit a previous potential value.
+              </p>
+              <p class="caveat">
+                Independent Q-learning is different: simultaneous updates and
+                exploration can move uphill or fluctuate. Its empirical path is
+                not claimed to descend monotonically.
+              </p>
+            </div>
+          </section>
+
+          <section class="chapter" id="stable-inefficient" data-story-act="5">
+            <div class="chapter-copy">
+              <p class="chapter-number">V</p>
+              <h2>Stable does not mean efficient</h2>
+              <p>
+                Exact enumeration finds one untolled pure Nash equilibrium and
+                one physical social optimum. They occupy different points on the
+                landscape.
+              </p>
+              <dl class="comparison-list">
+                <div>
+                  <dt>selfish equilibrium</dt>
+                  <dd><span data-exact="open-equilibrium-counts"></span></dd>
+                  <dd>
+                    average latency
+                    <span data-exact="open-equilibrium-average"></span>
+                  </dd>
+                  <dd>
+                    social cost <span data-exact="open-equilibrium-cost"></span>
+                  </dd>
+                  <dd>
+                    exploitability
+                    <span data-exact="open-equilibrium-exploitability"></span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>physical optimum</dt>
+                  <dd><span data-exact="open-optimum-counts"></span></dd>
+                  <dd>
+                    average latency
+                    <span data-exact="open-optimum-average"></span>
+                  </dd>
+                  <dd>
+                    social cost <span data-exact="open-optimum-cost"></span>
+                  </dd>
+                </div>
+              </dl>
+              <p>
+                Price of Anarchy and Price of Stability are both
+                <span data-exact="open-poa-fraction"></span>, approximately
+                <span data-exact="open-poa-decimal"></span>. The equilibrium
+                resists every one-agent deviation, but it does not minimize
+                total physical latency.
+              </p>
+            </div>
+          </section>
+
+          <section class="chapter" id="remove-road" data-story-act="6">
+            <div class="chapter-copy">
+              <p class="chapter-number">VI</p>
+              <h2>Remove a road. Everyone gets faster.</h2>
+              <p>
+                Close the free central link and train eighty fresh independent
+                learners. Only Upper and Lower remain. Exact enumeration gives
+                the unique equilibrium and optimum split
+                <span data-exact="closed-equilibrium-counts"></span>.
+              </p>
+              <div
+                class="before-after"
+                aria-label="Open and closed shortcut comparison"
+              >
+                <div>
+                  <span>shortcut open</span
+                  ><strong data-exact="open-equilibrium-average"></strong>
+                  average
+                </div>
+                <div>
+                  <span>shortcut removed</span
+                  ><strong data-exact="closed-equilibrium-average"></strong>
+                  average
+                </div>
+              </div>
+              <p>
+                Physical social cost becomes
+                <span data-exact="closed-equilibrium-cost"></span>. Equilibrium
+                average latency falls by 18.75 percent. This is Braess's paradox
+                in one authored atomic instance, not a claim that adding roads
+                always makes traffic worse.
+              </p>
+            </div>
+          </section>
+
+          <section class="chapter" id="tolls" data-story-act="7">
+            <div class="chapter-copy">
+              <p class="chapter-number">VII</p>
+              <h2>Price the externality</h2>
+              <p>
+                Restore the shortcut, then charge each user of a variable edge
+                the discrete marginal externality it imposes on the other users:
+              </p>
+              <div
+                class="equation-display"
+                data-math="\tau_e(x)=(x-1)[c_e(x)-c_e(x-1)]"
+              ></div>
+              <div
+                class="equation-display"
+                data-math="c(x)=x/2\quad\Longrightarrow\quad\tau(x)=(x-1)/2"
+              ></div>
+              <p>
+                Toll payments change private perceived cost but remain transfers
+                outside the physical-latency objective. In this instance, the
+                perceived marginal terms telescope, so the tolled potential
+                equals physical social cost.
+              </p>
+              <div
+                class="equation-display"
+                data-math="\sum_{k=1}^{x_e}[c_e(k)+\tau_e(k)]=x_ec_e(x_e)"
+              ></div>
+              <p>
+                The surface morphs from selfish potential to social cost. The
+                equilibrium basin moves to the physical optimum at
+                <span data-exact="tolled-equilibrium-counts"></span>.
+              </p>
+            </div>
+          </section>
+
+          <section class="chapter" id="three-adapt" data-story-act="8">
+            <div class="chapter-copy">
+              <p class="chapter-number">VIII</p>
+              <h2>Three ways to adapt</h2>
+              <p>
+                These algorithms use different information and support different
+                statements. Independent Q-learning sees only experienced
+                selected-route reward. Asynchronous best response sees exact
+                unilateral costs. Hedge receives a full counterfactual cost
+                vector.
+              </p>
+              <div id="scenario-chart" class="story-chart" tabindex="0"></div>
+              <div id="learner-chart" class="story-chart" tabindex="0"></div>
+              <div class="table-wrap">
+                <table id="learner-table">
+                  <caption>
+                    Measured representative results in the tolled scenario
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th>method</th>
+                      <th>final profile</th>
+                      <th>social cost</th>
+                      <th>exploitability</th>
+                      <th>statement</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <p class="caveat">
+                Best response has exact potential descent. Hedge controls
+                external regret under full information. Low regret does not
+                prove last-iterate pure-Nash convergence. Q-learning is
+                evaluated empirically against the exact benchmark.
+              </p>
+            </div>
+          </section>
+
+          <section
+            class="chapter chapter-answer"
+            id="answer"
+            data-story-act="9"
+          >
+            <div class="chapter-copy">
+              <p class="chapter-number">IX</p>
+              <h2>Answer</h2>
+              <p>
+                Individually sensible learning can stabilize on an inefficient
+                outcome when the game rewards the wrong local behavior. Removing
+                an edge or changing perceived prices changes which action is
+                useful to each learner. Learning quality and incentive quality
+                are separate questions.
+              </p>
+              <p class="closing-line">
+                The agents did not learn badly.<br />
+                They learned the incentives they were given.
+              </p>
+              <button
+                id="replay-experiment"
+                class="primary-action"
+                type="button"
+              >
+                Replay the experiment
+              </button>
+            </div>
+          </section>
+        </article>
+      </div>
+
+      <section
+        class="technical"
+        id="technical"
+        aria-labelledby="technical-title"
+      >
+        <header class="technical-intro">
+          <p class="eyebrow">For the technically curious</p>
+          <h2 id="technical-title">One small game, completely audited</h2>
+          <p>
+            The browser never trains an agent. Python defines the atomic game,
+            runs every experiment, derives exact benchmarks, selects
+            representative runs, and exports all 3,321 landscape states.
+            TypeScript validates and presents that immutable bundle.
+          </p>
+        </header>
+
+        <div class="technical-grid">
+          <article>
+            <h3>Atomic model</h3>
+            <p>
+              Eighty labeled, unsplittable agents share one origin and
+              destination. Each episode assigns every agent to one complete
+              route. Edge loads are integers. Physical social cost is
+              <span data-math="C(a)=\sum_e x_e(a)c_e(x_e(a))"></span>.
+            </p>
+          </article>
+          <article>
+            <h3>Exact deviations</h3>
+            <p>
+              To evaluate a candidate route, the implementation removes the
+              deviating agent from its current route, adds it to the candidate,
+              then recomputes affected loads. Exploitability is the largest
+              available cost reduction.
+            </p>
+            <div
+              data-math="\epsilon(a)=\max_i[J_i(a)-\min_r J_i(r,a_{-i})]"
+            ></div>
+          </article>
+          <article>
+            <h3>Count-state enumeration</h3>
+            <p>
+              Symmetry reduces the open game from 3<sup>80</sup> labeled
+              profiles to <span data-math="\binom{82}{2}=3321"></span> weak
+              compositions. The closed game has 81 states. Exact rational
+              arithmetic validates every feasible unilateral move.
+            </p>
+          </article>
+          <article>
+            <h3>Potential and welfare</h3>
+            <p>
+              Rosenthal potential proves finite strict-improvement paths
+              terminate, but its minimum need not minimize physical social cost.
+              The project computes all pure equilibria, all social optima, Price
+              of Anarchy, and Price of Stability independently.
+            </p>
+          </article>
+          <article>
+            <h3>Independent Q-learning</h3>
+            <p>
+              There are eighty separate Q rows and no parameter sharing,
+              controller, critic, replay buffer, or neural network. Gamma is
+              zero because each repeated interaction is a one-stage decision.
+              The final policy is evaluated separately at epsilon zero.
+            </p>
+          </article>
+          <article>
+            <h3>Regret and Hedge</h3>
+            <p>
+              For each agent and fixed route, cumulative counterfactual cost is
+              recomputed against the realized opponents at every round. Stable
+              log weights use full information. Mean and maximum per-round
+              regret summaries remain in the export.
+            </p>
+          </article>
+          <article>
+            <h3>Representative runs</h3>
+            <p>
+              Each Q-learning and Hedge scenario uses 64 deterministic seeds.
+              The representative is the medoid under pairwise L1 distance
+              between final route counts, with exploitability and seed only as
+              tie breakers. It is not selected for visual attractiveness.
+            </p>
+          </article>
+          <article>
+            <h3>Deterministic data</h3>
+            <p>
+              SeedSequence separates exploration, tie-breaking, initialization,
+              aggregation, playback, and final evaluation streams. Stable
+              ordering and finite JSON serialization make regeneration byte
+              identical. Visible metrics always use an exact exported snapshot.
+            </p>
+          </article>
+          <article>
+            <h3>Visual encodings</h3>
+            <p>
+              Tube area encodes edge load through a square-root radius map. Hue
+              encodes physical latency, with a permanently pale zero-cost
+              shortcut. Particle density encodes assignments; route-cycle
+              duration is proportional to physical route cost. Display height is
+              an affine normalization of raw potential.
+            </p>
+          </article>
+        </div>
+
+        <section class="methodology" aria-labelledby="methodology-title">
+          <h3 id="methodology-title">Experiment methodology</h3>
+          <dl id="methodology-list" class="methodology-list"></dl>
+          <p>
+            The canonical Q-learning configuration uses 5,000 episodes, α =
+            0.15, epsilon 0.80 × 0.999 per episode with floor 0.01, zero initial
+            Q values, random greedy tie-breaking, and PCG64 generators rooted at
+            seed 20260804. Hedge uses stable normalized log weights and exact
+            full-information costs.
+          </p>
+        </section>
+
+        <section class="limitations" aria-labelledby="limitations-title">
+          <h3 id="limitations-title">Limitations</h3>
+          <ul>
+            <li>
+              The model is one atomic symmetric routing game with eighty agents
+              sharing one origin and destination.
+            </li>
+            <li>
+              Agents choose one complete route per episode from two or three
+              routes.
+            </li>
+            <li>
+              There is no continuous-time traffic, queueing, or physical
+              road-capacity model beyond the authored latency functions.
+            </li>
+            <li>
+              Route costs are mathematical latency functions. Particles
+              visualize discrete assignments and relative costs; they are not
+              microscopic traffic.
+            </li>
+            <li>
+              Independent learners make each other's environments nonstationary;
+              no general convergence theorem is claimed.
+            </li>
+            <li>
+              Behavior can depend on hyperparameters and exploration. Q-learning
+              results here are empirical.
+            </li>
+            <li>
+              Hedge receives full counterfactual information; best response
+              receives exact model information.
+            </li>
+            <li>
+              The toll result is specific to this authored finite instance. Toll
+              payments are treated as transfers.
+            </li>
+            <li>
+              This is an educational computational study, not policy advice or a
+              real traffic forecast.
+            </li>
+          </ul>
+        </section>
+
+        <section class="references" aria-labelledby="references-title">
+          <h3 id="references-title">References and project notes</h3>
+          <p>
+            Established foundations come from Rosenthal on congestion-game
+            potential, Braess on paradoxical network improvement, Roughgarden
+            and Tardos on selfish routing, Watkins and Dayan on Q-learning, and
+            the multiplicative-weights and no-regret literature. Full verified
+            bibliographic details and a separation of established theory from
+            project-specific choices appear in the course map.
+          </p>
+          <nav class="project-links" aria-label="Project documentation">
+            <a
+              href="https://github.com/mihirrao-10/multi-agent-reinforcement-learning-in-congestion-games"
+              >Repository</a
+            >
+            <a
+              href="https://github.com/mihirrao-10/multi-agent-reinforcement-learning-in-congestion-games/blob/main/docs/interview-guide.md"
+              >Interview guide</a
+            >
+            <a
+              href="https://github.com/mihirrao-10/multi-agent-reinforcement-learning-in-congestion-games/blob/main/docs/course-map.md"
+              >Course map</a
+            >
+            <a
+              href="https://github.com/mihirrao-10/multi-agent-reinforcement-learning-in-congestion-games/blob/main/docs/experiment-methodology.md"
+              >Experiment methodology</a
+            >
+          </nav>
+        </section>
+      </section>
+    </main>
+
+    <footer>
+      <p>Multi-Agent Reinforcement Learning in Congestion Games</p>
+      <a href="#arrival">Return to the network ↑</a>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
