@@ -244,20 +244,22 @@ export class SceneController {
     if (this.disposed) return;
     this.animationFrame = requestAnimationFrame(this.animate);
     if (!this.visible) return;
-    const elapsed = this.clock.getElapsedTime();
+    const frameSeconds = Math.min(this.clock.getDelta(), 0.1);
+    const elapsed = this.clock.elapsedTime;
     this.networkOpacity = this.reducedMotion
       ? this.targetNetworkOpacity
-      : THREE.MathUtils.lerp(
+      : THREE.MathUtils.damp(
           this.networkOpacity,
           this.targetNetworkOpacity,
-          0.07,
+          5,
+          frameSeconds,
         );
     this.applyGroupOpacity(this.network.group, this.networkOpacity);
     this.applyGroupOpacity(this.landscape.group, 1 - this.networkOpacity);
     this.network.group.visible = this.networkOpacity > 0.005;
     this.landscape.group.visible = this.networkOpacity < 0.995;
     this.network.update(elapsed, this.reducedMotion);
-    this.landscape.update(this.reducedMotion);
+    this.landscape.update(this.reducedMotion, frameSeconds);
     this.controls.update();
     this.updateLandscapeLabels();
     this.labels.update(

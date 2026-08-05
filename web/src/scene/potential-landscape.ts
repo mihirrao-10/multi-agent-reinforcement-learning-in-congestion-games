@@ -148,11 +148,11 @@ export class PotentialLandscape {
     this.updateTrajectoryGeometry();
   }
 
-  update(reducedMotion: boolean): void {
+  update(reducedMotion: boolean, frameSeconds: number): void {
     const previous = this.morph;
     this.morph = reducedMotion
       ? this.targetMorph
-      : THREE.MathUtils.lerp(this.morph, this.targetMorph, 0.055);
+      : THREE.MathUtils.damp(this.morph, this.targetMorph, 4, frameSeconds);
     if (Math.abs(previous - this.morph) > 1e-5) {
       this.updateSurfaceGeometry();
       this.updateTrajectoryGeometry();

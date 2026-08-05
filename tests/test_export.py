@@ -32,6 +32,14 @@ def test_story_is_deterministic_and_valid() -> None:
     validate_story(first)
 
 
+def test_float_serialization_discards_platform_scale_noise() -> None:
+    first = deterministic_json_bytes({"probability": 0.5579733868637083})
+    second = deterministic_json_bytes({"probability": 0.5579733868637084})
+
+    assert first == second
+    assert first == b'{"probability":0.557973386864}\n'
+
+
 def test_validator_catches_intentional_corruption() -> None:
     payload = quick_story()
     corrupted = copy.deepcopy(payload)

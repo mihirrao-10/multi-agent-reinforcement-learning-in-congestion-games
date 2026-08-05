@@ -328,7 +328,7 @@ These are empirical outcomes of the declared algorithms, seeds, and hyperparamet
 - fixed visual scale metadata;
 - benchmark metadata and provenance.
 
-Serialization uses UTF-8, sorted keys, compact separators, finite numbers only, and one final newline. Wall-clock experiment runtimes, generation timestamp, and git commit are excluded from the canonical story bundle because they would make it vary. The configuration hash, package version, Python version, NumPy version, generator, and generation command are recorded. CI pins Python 3.12.13 and the package pins NumPy 2.5.1 so those provenance fields remain reproducible instead of drifting with a floating toolchain.
+Serialization uses UTF-8, sorted keys, compact separators, finite numbers only, canonical rounding to 12 decimal places, and one final newline. The rounding removes last-bit `exp` differences between supported processor architectures while retaining substantially more precision than the published summaries. Wall-clock experiment runtimes, generation timestamp, and git commit are excluded from the canonical story bundle because they would make it vary. The configuration hash, package version, Python version, NumPy version, generator, and generation command are recorded. CI pins Python 3.12.13 and the package pins NumPy 2.5.1 so those provenance fields remain reproducible instead of drifting with a floating toolchain.
 
 The deterministic contract is checked by generating independent temporary files, comparing them byte for byte to each other, and comparing them to the committed bundle. Python validates the payload after construction. TypeScript then validates the fetched schema and re-derives route counts, loads, costs, welfare, potential geometry, and index bounds before rendering.
 

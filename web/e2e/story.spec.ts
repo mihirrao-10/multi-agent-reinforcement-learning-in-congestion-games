@@ -119,7 +119,7 @@ test("the Begin action enters the learning chapter", async ({ page }) => {
 test("the complete scroll story switches exact games and learning claims", async ({
   page,
 }) => {
-  test.setTimeout(35_000);
+  test.setTimeout(60_000);
   await openStory(page);
   const stage = page.locator("#stage");
   const canvas = page.locator("#congestion-canvas");

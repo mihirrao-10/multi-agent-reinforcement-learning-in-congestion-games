@@ -188,7 +188,7 @@ cmp /tmp/story-a.json /tmp/story-b.json
 cmp /tmp/story-a.json web/public/data/story-v1.json
 ```
 
-Stable key ordering, compact finite-number JSON, fixed seed namespaces, excluded wall-clock runtime, and an excluded git hash make the canonical export byte reproducible from the same source and environment.
+Stable key ordering, compact finite-number JSON, canonical rounding to 12 decimal places, fixed seed namespaces, excluded wall-clock runtime, and an excluded git hash make the canonical export byte reproducible across the pinned Linux and macOS toolchains.
 
 ## Web development
 
