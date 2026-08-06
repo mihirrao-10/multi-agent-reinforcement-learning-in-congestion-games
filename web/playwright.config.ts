@@ -5,7 +5,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Chromium uses software WebGL on the hosted Linux runner. Keep the browser
+  // performance measurement isolated from another CPU-bound browser process so
+  // its frame-cadence assertion measures the story rather than runner contention.
+  workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "line",
   use: {
     baseURL:
