@@ -19,6 +19,31 @@ from congestion_marl.types import Scenario
 type Runner = Callable[[int, bool], LearningRun]
 
 
+def _public_learner_state(run: LearningRun) -> dict[str, object]:
+    """Retain audited metadata without exporting population-sized learner arrays."""
+
+    state = run.state
+    if run.learner == "q-learning":
+        return {
+            "qValueShape": [run.game.population, len(run.game.routes)],
+            "finalEvaluationEpsilon": state["finalEvaluationEpsilon"],
+            "feedback": state["feedback"],
+            "selectedActionOnlyUpdates": True,
+            "simultaneousActionSelection": True,
+        }
+    if run.learner == "hedge":
+        return {
+            "weightShape": [run.game.population, len(run.game.routes)],
+            "feedback": state["feedback"],
+            "perceivedCostNormalizationBound": state["perceivedCostNormalizationBound"],
+        }
+    return {
+        "acceptedMoveCountStates": state["acceptedMoveCountStates"],
+        "potentialPath": state["potentialPath"],
+        "termination": state["termination"],
+    }
+
+
 def _learner_block(
     learner: str,
     seeds: tuple[int, ...],
@@ -47,7 +72,7 @@ def _learner_block(
         "representative": {
             "summary": rerun.summary(equilibrium, optimum),
             "snapshots": [snapshot.to_dict() for snapshot in rerun.snapshots],
-            "learnerState": rerun.state,
+            "learnerState": _public_learner_state(rerun),
         },
         "runtime": {
             "includedInDeterministicBundle": False,
@@ -71,7 +96,7 @@ def run_experiment_matrix(config: ExperimentConfig | None = None) -> dict[str, o
         br_seeds = derive_seeds(
             controls.base_seed, controls.best_response_seeds, scenario_index * 3 + 2
         )
-        sample_episodes = snapshot_episode_indices(controls.q_learning.episodes)
+        sample_episodes = snapshot_episode_indices(controls.q_learning.episodes, game.population)
 
         def q_runner(
             seed: int,
@@ -120,4 +145,37 @@ def run_experiment_matrix(config: ExperimentConfig | None = None) -> dict[str, o
                 optimum,
             ),
         }
+    return result
+
+
+def run_q_learning_study(config: ExperimentConfig) -> dict[str, object]:
+    """Run the public independent-Q trajectory for each scenario at one population."""
+
+    result: dict[str, object] = {}
+    for scenario_index, scenario in enumerate(Scenario):
+        game = BraessGame(scenario, config.population)
+        exact = analyze_scenario(scenario, game.population)
+        sample_episodes = snapshot_episode_indices(config.q_learning.episodes, game.population)
+        seeds = derive_seeds(config.base_seed, config.seeds, scenario_index * 3)
+
+        def runner(
+            seed: int,
+            representative: bool,
+            run_game: BraessGame = game,
+            samples: tuple[int, ...] = sample_episodes,
+        ) -> LearningRun:
+            return run_independent_q(
+                run_game,
+                config.q_learning,
+                seed,
+                snapshot_episodes=samples if representative else (),
+            )
+
+        result[scenario.value] = _learner_block(
+            "independent-q-learning",
+            seeds,
+            runner,
+            exact.equilibria[0],
+            exact.social_optima[0],
+        )
     return result

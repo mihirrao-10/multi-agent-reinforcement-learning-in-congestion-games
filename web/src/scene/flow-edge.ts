@@ -10,7 +10,7 @@ export class FlowEdge {
   private readonly radialSegments: number;
   private readonly tubularSegments: number;
   private role: EdgeRole;
-  private radius = 0.02;
+  private radius = 1;
 
   constructor(curve: THREE.CatmullRomCurve3, role: EdgeRole) {
     this.curve = curve;
@@ -44,11 +44,16 @@ export class FlowEdge {
     });
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.frustumCulled = false;
-    this.update(0, false);
+    this.update(0, 100, false);
   }
 
-  update(load: number, focused: boolean, visible = true): void {
-    const nextRadius = edgeRadius(load);
+  update(
+    load: number,
+    population: number,
+    focused: boolean,
+    visible = true,
+  ): void {
+    const nextRadius = edgeRadius(load, population);
     if (Math.abs(nextRadius - this.radius) > 1e-5) {
       this.radius = nextRadius;
       const position = this.mesh.geometry.getAttribute(
@@ -68,15 +73,11 @@ export class FlowEdge {
       position.needsUpdate = true;
       this.mesh.geometry.computeBoundingSphere();
     }
-    const color = edgeColor(this.role, load);
+    const color = edgeColor(this.role, load, population);
     this.mesh.material.color.copy(color);
     this.mesh.material.emissive.copy(color);
-    this.mesh.material.emissiveIntensity = focused
-      ? 1.6
-      : this.role === "shortcut"
-        ? 0.9
-        : 0.58;
-    const opacity = visible ? (focused ? 1 : 0.9) : 0.05;
+    this.mesh.material.emissiveIntensity = focused ? 1.6 : 0.92;
+    const opacity = visible ? (focused ? 1 : 0.84) : 0;
     this.mesh.material.opacity = opacity;
     this.mesh.material.userData.baseOpacity = opacity;
   }

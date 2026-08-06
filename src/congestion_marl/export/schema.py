@@ -1,11 +1,11 @@
-"""Public story schema constants and exact-number serialization."""
+"""Population-aware public schema constants and exact-number serialization."""
 
 from __future__ import annotations
 
 from fractions import Fraction
 
-SCHEMA_VERSION = "1.0.0"
-MODEL_IDENTIFIER = "atomic-braess-80-v1"
+SCHEMA_VERSION = "2.0.0"
+MODEL_IDENTIFIER = "atomic-braess-population-normalized-v2"
 ROUTE_CODES = {"0": "U", "1": "L", "2": "Z"}
 
 

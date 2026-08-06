@@ -6,9 +6,9 @@ from congestion_marl.types import Scenario
 def test_open_and_closed_state_counts_are_complete() -> None:
     open_states = enumerate_count_states(BraessGame(Scenario.OPEN))
     closed_states = enumerate_count_states(BraessGame(Scenario.CLOSED))
-    assert len(open_states) == len(set(open_states)) == 3321
-    assert len(closed_states) == len(set(closed_states)) == 81
-    assert all(min(state) >= 0 and sum(state) == 80 for state in open_states)
+    assert len(open_states) == len(set(open_states)) == 5151
+    assert len(closed_states) == len(set(closed_states)) == 101
+    assert all(min(state) >= 0 and sum(state) == 100 for state in open_states)
     assert open_states == enumerate_count_states(BraessGame(Scenario.OPEN))
 
 

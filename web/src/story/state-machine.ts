@@ -1,4 +1,4 @@
-import type { ScenarioId } from "../data/story-schema";
+import type { Population, ScenarioId } from "../data/story-schema";
 
 export type SceneMode = "network" | "landscape";
 export type PlaybackState = "paused" | "playing" | "complete";
@@ -20,6 +20,8 @@ export interface StoryState {
   readonly reducedMotion: boolean;
   readonly userExploring: boolean;
   readonly trajectory: TrajectoryKind;
+  readonly population: Population;
+  readonly waiting: boolean;
 }
 
 export type StoryEvent =
@@ -33,9 +35,14 @@ export type StoryEvent =
   | { readonly type: "EXIT_EXPLORE" }
   | { readonly type: "FOCUS"; readonly target: FocusTarget }
   | { readonly type: "RESET_VIEW" }
-  | { readonly type: "SET_REDUCED_MOTION"; readonly reduced: boolean };
+  | { readonly type: "SET_REDUCED_MOTION"; readonly reduced: boolean }
+  | { readonly type: "SET_POPULATION"; readonly population: Population }
+  | { readonly type: "RESET_PLAYBACK" };
 
-export function initialStoryState(reducedMotion: boolean): StoryState {
+export function initialStoryState(
+  reducedMotion: boolean,
+  population: Population = 100,
+): StoryState {
   return {
     activeChapter: 0,
     sceneMode: "network",
@@ -49,6 +56,8 @@ export function initialStoryState(reducedMotion: boolean): StoryState {
     reducedMotion,
     userExploring: false,
     trajectory: "q-learning",
+    population,
+    waiting: true,
   };
 }
 
@@ -71,7 +80,7 @@ function chapterPatch(chapter: number): Partial<StoryState> {
       shortcutOpen: true,
       tollsActive: false,
       trajectory: "q-learning",
-      focusTarget: "equilibrium",
+      focusTarget: "none",
       playback: "paused",
     };
   }
@@ -137,13 +146,18 @@ export function reduceStoryState(
       };
     }
     case "PLAY":
-      return { ...state, playback: "playing" };
+      return { ...state, playback: "playing", waiting: false };
     case "PAUSE":
       return { ...state, playback: "paused" };
     case "COMPLETE":
       return { ...state, playback: "complete" };
     case "REPLAY":
-      return { ...state, snapshotIndex: 0, playback: "playing" };
+      return {
+        ...state,
+        snapshotIndex: 0,
+        playback: "playing",
+        waiting: false,
+      };
     case "SET_SNAPSHOT":
       return { ...state, snapshotIndex: Math.max(0, Math.floor(event.index)) };
     case "TOGGLE_EXPLORE": {
@@ -173,5 +187,15 @@ export function reduceStoryState(
       };
     case "SET_REDUCED_MOTION":
       return { ...state, reducedMotion: event.reduced };
+    case "SET_POPULATION":
+      return {
+        ...state,
+        population: event.population,
+        snapshotIndex: 0,
+        playback: "paused",
+        waiting: true,
+      };
+    case "RESET_PLAYBACK":
+      return { ...state, snapshotIndex: 0, playback: "paused", waiting: true };
   }
 }

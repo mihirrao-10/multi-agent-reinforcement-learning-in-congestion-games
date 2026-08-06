@@ -7,6 +7,13 @@ export const scenarioIdSchema = z.enum([
 ]);
 export type ScenarioId = z.infer<typeof scenarioIdSchema>;
 
+export const populationSchema = z.union([
+  z.literal(100),
+  z.literal(1_000),
+  z.literal(10_000),
+]);
+export type Population = z.infer<typeof populationSchema>;
+
 const exactNumberSchema = z.object({
   numerator: z.number().int(),
   denominator: z.number().int().positive(),
@@ -19,7 +26,7 @@ const exactProfileSchema = z.object({
   physicalSocialCost: exactNumberSchema,
   averagePhysicalLatency: exactNumberSchema,
   rosenthalPotential: exactNumberSchema,
-  perceivedPotential: exactNumberSchema.optional(),
+  perceivedPotential: exactNumberSchema,
   exploitability: exactNumberSchema,
 });
 
@@ -30,9 +37,10 @@ const exactScenarioSchema = z.object({
   priceOfAnarchy: exactNumberSchema,
   priceOfStability: exactNumberSchema,
   potentialIdentity: z.object({
-    validated: z.boolean(),
-    feasibleDeviationChecks: z.number().int().nonnegative(),
-    arithmetic: z.string(),
+    validated: z.literal(true),
+    feasibleDeviationChecks: z.number().int().positive(),
+    arithmetic: z.string().min(1),
+    method: z.string().min(1),
   }),
   tolledPotentialIdentity: z.object({
     validated: z.boolean(),
@@ -41,10 +49,9 @@ const exactScenarioSchema = z.object({
 });
 
 export const storySnapshotSchema = z.object({
-  episode: z.number().int().nonnegative(),
+  episode: z.number().int().positive(),
   epsilon: z.number().finite().min(0).max(1),
   routeCounts: z.array(z.number().int().nonnegative()).min(2).max(3),
-  assignments: z.array(z.number().int().nonnegative()).length(80),
   edgeLoads: z.record(z.string(), z.number().int().nonnegative()),
   edgePhysicalLatencies: z.record(
     z.string(),
@@ -64,8 +71,16 @@ export const storySnapshotSchema = z.object({
   }),
   policyEntropy: z.number().finite().nonnegative(),
 });
-
 export type StorySnapshot = z.infer<typeof storySnapshotSchema>;
+
+export const presentationProfileSchema = storySnapshotSchema.omit({
+  episode: true,
+  epsilon: true,
+  regret: true,
+  policyEntropy: true,
+});
+export type PresentationProfile = z.infer<typeof presentationProfileSchema>;
+export type NetworkPresentation = StorySnapshot | PresentationProfile;
 
 const finalSummarySchema = z.object({
   seed: z.number().int().nonnegative(),
@@ -74,7 +89,6 @@ const finalSummarySchema = z.object({
     .min(2)
     .max(3),
   finalGreedyRouteCounts: z.array(z.number().int().nonnegative()).min(2).max(3),
-  finalGreedyAssignments: z.array(z.number().int().nonnegative()).length(80),
   physicalSocialCost: z.number().finite().nonnegative(),
   averagePhysicalLatency: z.number().finite().nonnegative(),
   exploitability: z.number().finite().nonnegative(),
@@ -83,7 +97,6 @@ const finalSummarySchema = z.object({
   meanAverageExternalRegret: z.number().finite(),
   maximumAverageExternalRegret: z.number().finite(),
 });
-
 export type FinalSummary = z.infer<typeof finalSummarySchema>;
 
 const aggregateMetricSchema = z.object({
@@ -116,12 +129,20 @@ const learnerBlockSchema = z.object({
     .passthrough(),
   representative: z.object({
     summary: finalSummarySchema,
-    snapshots: z.array(storySnapshotSchema),
-    learnerState: z.record(z.string(), z.unknown()),
+    snapshots: z.array(storySnapshotSchema).min(1),
+    learnerState: z.object({
+      qValueShape: z.tuple([
+        z.number().int().positive(),
+        z.number().int().min(2).max(3),
+      ]),
+      finalEvaluationEpsilon: z.literal(0),
+      feedback: z.string().min(1),
+      selectedActionOnlyUpdates: z.literal(true),
+      simultaneousActionSelection: z.literal(true),
+    }),
   }),
   runtime: z.record(z.string(), z.unknown()),
 });
-
 export type LearnerBlock = z.infer<typeof learnerBlockSchema>;
 
 const landscapeVertexSchema = z.object({
@@ -130,20 +151,45 @@ const landscapeVertexSchema = z.object({
   originalPotential: z.number().finite(),
   physicalSocialCost: z.number().finite(),
   tolledPotential: z.number().finite(),
-  exploitability: z.number().finite().nonnegative(),
-  isUntolledEquilibrium: z.boolean(),
-  isPhysicalOptimum: z.boolean(),
   displayHeightOriginal: z.number().finite(),
   displayHeightTolled: z.number().finite(),
 });
-
 export type LandscapeVertex = z.infer<typeof landscapeVertexSchema>;
 
-export const storySchema = z.object({
-  schemaVersion: z.literal("1.0.0"),
+const landscapePointSchema = z.object({
+  routeCounts: z.tuple([z.number().int(), z.number().int(), z.number().int()]),
+  displayCoordinates: z.tuple([z.number().finite(), z.number().finite()]),
+  displayHeightOriginal: z.number().finite(),
+  displayHeightTolled: z.number().finite(),
+});
+export type LandscapePoint = z.infer<typeof landscapePointSchema>;
+
+const markerSchema = z.object({
+  routeCounts: z.tuple([z.number().int(), z.number().int(), z.number().int()]),
+  displayCoordinates: z.tuple([z.number().finite(), z.number().finite()]),
+  originalPotential: z.number().finite(),
+  tolledPotential: z.number().finite(),
+});
+
+const comparisonLearnerSchema = z.object({
+  learner: z.string(),
+  seedCount: z.number().int().positive(),
+  representativeSelection: z.record(z.string(), z.unknown()),
+  representativeSummary: finalSummarySchema,
+  aggregate: z.record(z.string(), z.unknown()),
+});
+export type ComparisonLearner = z.infer<typeof comparisonLearnerSchema>;
+
+const comparisonScenarioSchema = z.object({
+  qLearning: comparisonLearnerSchema,
+  bestResponse: comparisonLearnerSchema,
+  hedge: comparisonLearnerSchema,
+});
+
+export const manifestSchema = z.object({
+  schemaVersion: z.literal("2.0.0"),
   model: z.object({
-    identifier: z.literal("atomic-braess-80-v1"),
-    agentCount: z.literal(80),
+    identifier: z.literal("atomic-braess-population-normalized-v2"),
     nodes: z.array(
       z.object({
         id: z.enum(["S", "U", "V", "T"]),
@@ -169,6 +215,7 @@ export const storySchema = z.object({
       }),
     ),
     routeCodeMapping: z.record(z.string(), z.string()),
+    latencyRule: z.string(),
     units: z.string(),
     conventions: z.record(z.string(), z.string()),
     scenarios: z.array(
@@ -180,39 +227,79 @@ export const storySchema = z.object({
       }),
     ),
   }),
+  defaultPopulation: z.literal(100),
+  comparisonPopulation: z.literal(100),
+  populations: z
+    .array(
+      z.object({
+        agents: populationSchema,
+        label: z.string(),
+        bundle: z.string(),
+        visualBeadBudget: z.number().int().positive().max(200),
+        study: z.string(),
+      }),
+    )
+    .length(3),
   seedPolicy: z.record(z.string(), z.unknown()),
+});
+export type StoryManifest = z.infer<typeof manifestSchema>;
+
+export const populationBundleSchema = z.object({
+  schemaVersion: z.literal("2.0.0"),
+  modelIdentifier: z.literal("atomic-braess-population-normalized-v2"),
+  population: populationSchema,
+  waitingState: z.object({
+    kind: z.literal("preExperiment"),
+    waitingCount: populationSchema,
+    edgeLoads: z.record(z.string(), z.literal(0)),
+    metricsAvailable: z.literal(false),
+  }),
   exactAnalysis: z.object({
     "braess-open": exactScenarioSchema,
     "braess-closed": exactScenarioSchema,
     "braess-tolled": exactScenarioSchema,
   }),
-  experiments: z.object({
+  scenarioStates: z.object({
+    "braess-open": z.object({
+      equilibrium: presentationProfileSchema,
+      optimum: presentationProfileSchema,
+    }),
+    "braess-closed": z.object({
+      equilibrium: presentationProfileSchema,
+      optimum: presentationProfileSchema,
+    }),
+    "braess-tolled": z.object({
+      equilibrium: presentationProfileSchema,
+      optimum: presentationProfileSchema,
+    }),
+  }),
+  learning: z.object({
     configuration: z.record(z.string(), z.unknown()),
     scenarios: z.object({
-      "braess-open": z.object({
-        qLearning: learnerBlockSchema,
-        hedge: learnerBlockSchema,
-        bestResponse: learnerBlockSchema,
-      }),
-      "braess-closed": z.object({
-        qLearning: learnerBlockSchema,
-        hedge: learnerBlockSchema,
-        bestResponse: learnerBlockSchema,
-      }),
-      "braess-tolled": z.object({
-        qLearning: learnerBlockSchema,
-        hedge: learnerBlockSchema,
-        bestResponse: learnerBlockSchema,
-      }),
+      "braess-open": learnerBlockSchema,
+      "braess-closed": learnerBlockSchema,
+      "braess-tolled": learnerBlockSchema,
     }),
   }),
   potentialLandscape: z.object({
+    sampling: z.object({
+      mode: z.enum([
+        "complete-count-lattice",
+        "deterministic-barycentric-sample",
+      ]),
+      resolution: z.number().int().positive(),
+      sampledVertexCount: z.number().int().positive(),
+      fullCountStateCount: z.number().int().positive(),
+      statement: z.string(),
+    }),
     vertices: z.array(landscapeVertexSchema),
     triangles: z.array(
       z.tuple([z.number().int(), z.number().int(), z.number().int()]),
     ),
-    equilibriumVertexIndex: z.number().int().nonnegative(),
-    optimumVertexIndex: z.number().int().nonnegative(),
+    markers: z.object({
+      equilibria: z.array(markerSchema).min(1),
+      optima: z.array(markerSchema).min(1),
+    }),
     heightTransform: z.object({
       formula: z.string(),
       sharedScale: z.number().finite().positive(),
@@ -221,13 +308,28 @@ export const storySchema = z.object({
       meaning: z.string(),
     }),
     cornerLabels: z.array(z.string()).length(3),
-    trajectoryVertexIndices: z.record(
-      z.string(),
-      z.array(z.number().int().nonnegative()),
-    ),
+    trajectories: z.record(z.string(), z.array(landscapePointSchema).min(1)),
+    bestResponseAudit: z.object({
+      rawStepCount: z.number().int().positive(),
+      renderedPointCount: z.number().int().positive(),
+      rawPathValidated: z.literal(true),
+      everyMoveIsOneAgent: z.literal(true),
+      strictlyDecreasingPotential: z.literal(true),
+      renderedDescription: z.string(),
+    }),
   }),
-  benchmarks: z.record(z.string(), z.unknown()),
+  comparison: z
+    .object({
+      population: z.literal(100),
+      scope: z.string(),
+      scenarios: z.object({
+        "braess-open": comparisonScenarioSchema,
+        "braess-closed": comparisonScenarioSchema,
+        "braess-tolled": comparisonScenarioSchema,
+      }),
+    })
+    .optional(),
   provenance: z.record(z.string(), z.unknown()),
 });
-
-export type StoryData = z.infer<typeof storySchema>;
+export type PopulationBundle = z.infer<typeof populationBundleSchema>;
+export type StoryData = PopulationBundle;

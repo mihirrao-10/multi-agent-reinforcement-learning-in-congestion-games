@@ -4,7 +4,7 @@ from congestion_marl.cli import main
 def test_cli_help_and_exact_enumeration(capsys: object) -> None:
     assert main(["enumerate", "--scenario", "braess-open", "--json"]) == 0
     output = capsys.readouterr().out  # type: ignore[attr-defined]
-    assert '"countStates": 3321' in output
+    assert '"countStates": 5151' in output
 
 
 def test_cli_quick_simulation_and_invalid_scenario(capsys: object) -> None:

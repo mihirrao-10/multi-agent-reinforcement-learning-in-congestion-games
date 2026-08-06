@@ -1,4 +1,4 @@
-"""Exact authored eighty-agent Braess congestion game."""
+"""Exact population-normalized atomic Braess congestion game."""
 
 from __future__ import annotations
 
@@ -48,10 +48,10 @@ class BraessGame:
     def edge_physical_latencies(self, counts: CountState) -> dict[str, Fraction]:
         loads = self.edge_loads(counts)
         return {
-            "SU": variable_latency(loads["SU"]),
+            "SU": variable_latency(loads["SU"], self.population),
             "UT": Fraction(45),
             "SV": Fraction(45),
-            "VT": variable_latency(loads["VT"]),
+            "VT": variable_latency(loads["VT"], self.population),
             "UV": Fraction(0),
         }
 
@@ -60,10 +60,10 @@ class BraessGame:
         if not self.tolled:
             return {edge: Fraction(0) for edge in loads}
         return {
-            "SU": marginal_externality_toll(loads["SU"]),
+            "SU": marginal_externality_toll(loads["SU"], self.population),
             "UT": Fraction(0),
             "SV": Fraction(0),
-            "VT": marginal_externality_toll(loads["VT"]),
+            "VT": marginal_externality_toll(loads["VT"], self.population),
             "UV": Fraction(0),
         }
 
@@ -128,8 +128,8 @@ class BraessGame:
     def social_cost(self, counts: CountState) -> Fraction:
         loads = self.edge_loads(counts)
         return (
-            Fraction(loads["SU"] * loads["SU"], 2)
-            + Fraction(loads["VT"] * loads["VT"], 2)
+            Fraction(40 * loads["SU"] * loads["SU"], self.population)
+            + Fraction(40 * loads["VT"] * loads["VT"], self.population)
             + Fraction(45 * (loads["UT"] + loads["SV"]))
         )
 
@@ -141,8 +141,8 @@ class BraessGame:
     def rosenthal_potential(self, counts: CountState) -> Fraction:
         loads = self.edge_loads(counts)
         return (
-            Fraction(loads["SU"] * (loads["SU"] + 1), 4)
-            + Fraction(loads["VT"] * (loads["VT"] + 1), 4)
+            Fraction(20 * loads["SU"] * (loads["SU"] + 1), self.population)
+            + Fraction(20 * loads["VT"] * (loads["VT"] + 1), self.population)
             + Fraction(45 * (loads["UT"] + loads["SV"]))
         )
 

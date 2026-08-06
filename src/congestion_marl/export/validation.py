@@ -1,15 +1,16 @@
-"""Strict semantic validation for the authoritative story bundle."""
+"""Independent semantic validation for population-aware public exports."""
 
 from __future__ import annotations
 
 import json
 import math
-from collections import Counter
 from collections.abc import Mapping, Sequence
+from itertools import pairwise
 from pathlib import Path
 from typing import cast
 
 from congestion_marl.analysis.enumeration import analyze_scenario
+from congestion_marl.config import POPULATION, SUPPORTED_POPULATIONS
 from congestion_marl.export.schema import MODEL_IDENTIFIER, SCHEMA_VERSION
 from congestion_marl.games.braess import BraessGame
 from congestion_marl.types import Scenario
@@ -47,174 +48,313 @@ def _finite_tree(value: object, path: str = "root") -> None:
             _finite_tree(child, f"{path}[{index}]")
 
 
-def _validate_snapshot(snapshot: Mapping[str, object], game: BraessGame) -> None:
+def _exact_decimal(profile: Mapping[str, object], key: str) -> float:
+    number = cast(Mapping[str, object], profile[key])
+    return _number(number["decimal"], key)
+
+
+def _validate_snapshot(
+    snapshot: Mapping[str, object], game: BraessGame, previous_episode: int
+) -> int:
+    episode = _integer(snapshot["episode"], "snapshot episode")
+    _require(episode > previous_episode, "snapshot episodes must increase strictly")
     counts = tuple(cast(list[int], snapshot["routeCounts"]))
     game.validate_counts(counts)
-    assignments = cast(list[int], snapshot["assignments"])
-    _require(len(assignments) == game.population, "snapshot must contain all eighty assignments")
-    _require(all(0 <= value < len(game.routes) for value in assignments), "invalid route code")
-    derived_counts = tuple(Counter(assignments)[index] for index in range(len(game.routes)))
-    _require(derived_counts == counts, "snapshot assignments disagree with route counts")
+    _require("assignments" not in snapshot, "population-sized snapshot assignments are forbidden")
     _require(
         cast(dict[str, int], snapshot["edgeLoads"]) == game.edge_loads(counts),
-        "edge loads disagree",
+        "snapshot edge loads disagree",
     )
     physical = tuple(float(value) for value in game.route_physical_costs(counts).values())
     perceived = tuple(float(value) for value in game.route_perceived_costs(counts).values())
-    exported_physical = cast(list[float], snapshot["routePhysicalCosts"])
-    exported_perceived = cast(list[float], snapshot["routePerceivedCosts"])
+    exported_physical = tuple(cast(list[float], snapshot["routePhysicalCosts"]))
+    exported_perceived = tuple(cast(list[float], snapshot["routePerceivedCosts"]))
     _require(
         all(
-            math.isclose(a, b, abs_tol=1e-12)
-            for a, b in zip(physical, exported_physical, strict=True)
+            math.isclose(left, right, abs_tol=1e-10)
+            for left, right in zip(physical, exported_physical, strict=True)
         ),
-        "route physical costs disagree",
+        "snapshot physical route costs disagree",
     )
     _require(
         all(
-            math.isclose(a, b, abs_tol=1e-12)
-            for a, b in zip(perceived, exported_perceived, strict=True)
+            math.isclose(left, right, abs_tol=1e-10)
+            for left, right in zip(perceived, exported_perceived, strict=True)
         ),
-        "route perceived costs disagree",
+        "snapshot perceived route costs disagree",
     )
+    edge_latencies = cast(Mapping[str, object], snapshot["edgePhysicalLatencies"])
+    for edge, expected_latency in game.edge_physical_latencies(counts).items():
+        _require(
+            math.isclose(_number(edge_latencies[edge], f"{edge} latency"), float(expected_latency)),
+            f"snapshot edge latency {edge} disagrees",
+        )
     social = float(game.social_cost(counts))
-    _require(
-        math.isclose(_number(snapshot["physicalSocialCost"], "physical social cost"), social),
-        "social cost disagrees",
-    )
-    _require(
-        math.isclose(
-            _number(snapshot["averagePhysicalLatency"], "average physical latency"),
-            social / game.population,
-        ),
-        "average latency disagrees",
-    )
-    _require(
-        math.isclose(
-            _number(snapshot["rosenthalPotential"], "Rosenthal potential"),
-            float(game.rosenthal_potential(counts)),
-        ),
-        "Rosenthal potential disagrees",
-    )
-    _require(
-        math.isclose(
-            _number(snapshot["exploitability"], "exploitability"),
-            float(game.exploitability(counts)),
-        ),
-        "exploitability disagrees",
-    )
-
-
-def _validate_exact(exact: Mapping[str, object]) -> None:
-    expected = {
-        Scenario.OPEN: ((0, 0, 80), (35, 35, 10), 6400.0, 5175.0),
-        Scenario.CLOSED: ((40, 40), (40, 40), 5200.0, 5200.0),
-        Scenario.TOLLED: ((35, 35, 10), (35, 35, 10), 5175.0, 5175.0),
+    checks = {
+        "physicalSocialCost": social,
+        "averagePhysicalLatency": social / game.population,
+        "totalTollPayment": float(game.total_toll_payment(counts)),
+        "rosenthalPotential": float(game.rosenthal_potential(counts)),
+        "perceivedPotential": float(game.perceived_potential(counts)),
+        "exploitability": float(game.exploitability(counts)),
     }
-    for scenario, (equilibrium, optimum, equilibrium_cost, optimum_cost) in expected.items():
+    for key, expected_value in checks.items():
+        _require(
+            math.isclose(_number(snapshot[key], key), expected_value, abs_tol=1e-9),
+            f"snapshot {key} disagrees",
+        )
+    return episode
+
+
+def _validate_exact(exact: Mapping[str, object], population: int) -> None:
+    for scenario in Scenario:
+        game = BraessGame(scenario, population)
+        derived = analyze_scenario(scenario, population)
         block = cast(Mapping[str, object], exact[scenario.value])
-        derived = analyze_scenario(scenario)
         _require(
             _integer(block["countStateCount"], "count-state total") == derived.count_states,
             "count-state total disagrees",
         )
         equilibria = cast(list[Mapping[str, object]], block["pureNashEquilibria"])
         optima = cast(list[Mapping[str, object]], block["socialOptima"])
-        actual_equilibrium = tuple(cast(list[int], equilibria[0]["routeCounts"]))
-        actual_optimum = tuple(cast(list[int], optima[0]["routeCounts"]))
-        _require(
-            len(equilibria) == 1 and actual_equilibrium == equilibrium,
-            "canonical equilibrium disagrees",
+        exported_equilibria = tuple(
+            tuple(cast(list[int], profile["routeCounts"])) for profile in equilibria
         )
-        _require(len(optima) == 1 and actual_optimum == optimum, "canonical optimum disagrees")
-        eq_cost = cast(Mapping[str, object], equilibria[0]["physicalSocialCost"])
-        op_cost = cast(Mapping[str, object], optima[0]["physicalSocialCost"])
+        exported_optima = tuple(
+            tuple(cast(list[int], profile["routeCounts"])) for profile in optima
+        )
+        _require(exported_equilibria == derived.equilibria, "equilibrium set disagrees")
+        _require(exported_optima == derived.social_optima, "social optimum set disagrees")
+        for profile, state in zip(equilibria, derived.equilibria, strict=True):
+            _require(
+                math.isclose(
+                    _exact_decimal(profile, "physicalSocialCost"), float(game.social_cost(state))
+                ),
+                "equilibrium social cost disagrees",
+            )
+        for profile, state in zip(optima, derived.social_optima, strict=True):
+            _require(
+                math.isclose(
+                    _exact_decimal(profile, "physicalSocialCost"), float(game.social_cost(state))
+                ),
+                "optimum social cost disagrees",
+            )
+    if population == POPULATION:
+        open_block = cast(Mapping[str, object], exact[Scenario.OPEN.value])
+        closed_block = cast(Mapping[str, object], exact[Scenario.CLOSED.value])
+        tolled_block = cast(Mapping[str, object], exact[Scenario.TOLLED.value])
+        open_equilibrium = cast(list[Mapping[str, object]], open_block["pureNashEquilibria"])[0]
+        open_optimum = cast(list[Mapping[str, object]], open_block["socialOptima"])[0]
+        _require(open_equilibrium["routeCounts"] == [0, 0, 100], "default equilibrium disagrees")
+        _require(open_optimum["routeCounts"] == [44, 44, 12], "default optimum disagrees")
         _require(
-            _number(eq_cost["decimal"], "equilibrium social cost") == equilibrium_cost,
-            "equilibrium social cost disagrees",
+            _exact_decimal(open_optimum, "physicalSocialCost") == 6468.8,
+            "default optimum cost disagrees",
         )
         _require(
-            _number(op_cost["decimal"], "optimum social cost") == optimum_cost,
-            "optimum social cost disagrees",
+            cast(list[Mapping[str, object]], closed_block["pureNashEquilibria"])[0]["routeCounts"]
+            == [50, 50],
+            "default closed split disagrees",
+        )
+        _require(
+            cast(list[Mapping[str, object]], tolled_block["pureNashEquilibria"])[0]["routeCounts"]
+            == [44, 44, 12],
+            "default tolled split disagrees",
+        )
+        poa = cast(Mapping[str, object], open_block["priceOfAnarchy"])
+        _require(
+            (poa["numerator"], poa["denominator"]) == (5000, 4043),
+            "default Price of Anarchy disagrees",
         )
 
 
-def _validate_landscape(landscape: Mapping[str, object]) -> None:
+def _validate_learning(learning: Mapping[str, object], population: int) -> None:
+    configuration = cast(Mapping[str, object], learning["configuration"])
+    _require(configuration["agents"] == population, "learning population disagrees")
+    scenarios = cast(Mapping[str, object], learning["scenarios"])
+    for scenario in Scenario:
+        game = BraessGame(scenario, population)
+        block = cast(Mapping[str, object], scenarios[scenario.value])
+        seeds = cast(list[int], block["seedList"])
+        _require(bool(seeds) and len(seeds) == len(set(seeds)), "learning seed list is invalid")
+        representative = cast(Mapping[str, object], block["representative"])
+        summary = cast(Mapping[str, object], representative["summary"])
+        final_counts = tuple(cast(list[int], summary["finalGreedyRouteCounts"]))
+        game.validate_counts(final_counts)
+        _require("finalGreedyAssignments" not in summary, "large final assignments are forbidden")
+        _require(
+            math.isclose(
+                _number(summary["exploitability"], "final exploitability"),
+                float(game.exploitability(final_counts)),
+            ),
+            "final exploitability disagrees",
+        )
+        state = cast(Mapping[str, object], representative["learnerState"])
+        _require(
+            state.get("qValueShape") == [population, len(game.routes)],
+            "public Q-value shape disagrees",
+        )
+        previous = 0
+        snapshots = cast(list[Mapping[str, object]], representative["snapshots"])
+        _require(bool(snapshots), "representative trajectory is empty")
+        for snapshot in snapshots:
+            previous = _validate_snapshot(snapshot, game, previous)
+        _require(
+            previous == cast(Mapping[str, object], configuration["qLearning"])["episodes"],
+            "trajectory does not include the final training episode",
+        )
+        if population > POPULATION:
+            _require(len(seeds) == 1, "large-population study must be labeled as one run")
+            _require(len(snapshots) <= 140, "large-population trajectory was not thinned")
+
+
+def _validate_scenario_states(states: Mapping[str, object], population: int) -> None:
+    for scenario in Scenario:
+        game = BraessGame(scenario, population)
+        exact = analyze_scenario(scenario, population)
+        block = cast(Mapping[str, object], states[scenario.value])
+        for key, expected in (
+            ("equilibrium", exact.equilibria[0]),
+            ("optimum", exact.social_optima[0]),
+        ):
+            profile = cast(Mapping[str, object], block[key])
+            counts = tuple(cast(list[int], profile["routeCounts"]))
+            _require(counts == expected, f"{scenario.value} {key} profile disagrees")
+            synthetic = dict(profile)
+            synthetic.update(
+                {
+                    "episode": 1,
+                    "epsilon": 0.0,
+                    "regret": {"meanAverage": 0.0, "maximumAverage": 0.0},
+                    "policyEntropy": 0.0,
+                }
+            )
+            _validate_snapshot(synthetic, game, 0)
+
+
+def _validate_landscape(landscape: Mapping[str, object], population: int) -> None:
+    sampling = cast(Mapping[str, object], landscape["sampling"])
+    resolution = _integer(sampling["resolution"], "landscape resolution")
+    expected_vertices = (resolution + 1) * (resolution + 2) // 2
+    expected_triangles = resolution * resolution
     vertices = cast(list[Mapping[str, object]], landscape["vertices"])
     triangles = cast(list[list[int]], landscape["triangles"])
-    _require(len(vertices) == 3321, "landscape must contain 3321 vertices")
-    _require(len(triangles) == 6400, "landscape must contain 6400 triangles")
-    states = [tuple(cast(list[int], vertex["routeCounts"])) for vertex in vertices]
-    _require(len(set(states)) == 3321, "landscape has duplicate or missing count states")
-    _require(
-        all(len(state) == 3 and min(state) >= 0 and sum(state) == 80 for state in states),
-        "invalid landscape count state",
-    )
-    for triangle in triangles:
-        _require(len(triangle) == 3 and len(set(triangle)) == 3, "degenerate landscape triangle")
+    _require(len(vertices) == expected_vertices, "landscape vertex total disagrees")
+    _require(len(triangles) == expected_triangles, "landscape triangle total disagrees")
+    game = BraessGame(Scenario.OPEN, population)
+    states: list[tuple[int, ...]] = []
+    for vertex in vertices:
+        state = tuple(cast(list[int], vertex["routeCounts"]))
+        game.validate_counts(state)
+        states.append(state)
         _require(
-            all(0 <= index < len(vertices) for index in triangle),
-            "triangle index out of bounds",
+            math.isclose(
+                _number(vertex["originalPotential"], "sampled potential"),
+                float(game.rosenthal_potential(state)),
+            ),
+            "sampled potential disagrees",
         )
-        points = [cast(list[float], vertices[index]["displayCoordinates"]) for index in triangle]
-        area_twice = (points[1][0] - points[0][0]) * (points[2][1] - points[0][1]) - (
-            points[1][1] - points[0][1]
-        ) * (points[2][0] - points[0][0])
-        _require(abs(area_twice) > 1e-12, "geometrically degenerate landscape triangle")
-    equilibrium_index = _integer(landscape["equilibriumVertexIndex"], "equilibrium index")
-    optimum_index = _integer(landscape["optimumVertexIndex"], "optimum index")
-    _require(states[equilibrium_index] == (0, 0, 80), "equilibrium vertex index disagrees")
-    _require(states[optimum_index] == (35, 35, 10), "optimum vertex index disagrees")
+        _require(
+            math.isclose(
+                _number(vertex["physicalSocialCost"], "sampled social cost"),
+                float(game.social_cost(state)),
+            ),
+            "sampled social cost disagrees",
+        )
+    _require(len(states) == len(set(states)), "landscape sample has duplicate exact states")
+    for triangle in triangles:
+        _require(len(triangle) == 3 and len(set(triangle)) == 3, "degenerate triangle")
+        _require(all(0 <= index < len(vertices) for index in triangle), "triangle index invalid")
+    markers = cast(Mapping[str, object], landscape["markers"])
+    exact = analyze_scenario(Scenario.OPEN, population)
+    marker_equilibria = tuple(
+        tuple(cast(list[int], marker["routeCounts"]))
+        for marker in cast(list[Mapping[str, object]], markers["equilibria"])
+    )
+    marker_optima = tuple(
+        tuple(cast(list[int], marker["routeCounts"]))
+        for marker in cast(list[Mapping[str, object]], markers["optima"])
+    )
+    _require(marker_equilibria == exact.equilibria, "equilibrium markers disagree")
+    _require(marker_optima == exact.social_optima, "optimum markers disagree")
+    trajectories = cast(Mapping[str, object], landscape["trajectories"])
+    best_path = [
+        tuple(cast(list[int], point["routeCounts"]))
+        for point in cast(list[Mapping[str, object]], trajectories["braess-open-best-response"])
+    ]
+    _require(bool(best_path), "best-response display path is empty")
+    potentials = [game.rosenthal_potential(state) for state in best_path]
+    _require(
+        all(left > right for left, right in pairwise(potentials)), "path arrows do not descend"
+    )
+    _require(game.is_pure_nash(best_path[-1]), "best-response path misses equilibrium")
+    audit = cast(Mapping[str, object], landscape["bestResponseAudit"])
+    _require(audit["rawPathValidated"] is True, "raw best-response path was not validated")
+    if population > POPULATION:
+        _require(
+            sampling["mode"] == "deterministic-barycentric-sample",
+            "large surface must be labeled sampled",
+        )
+        _require(len(vertices) < 10_000, "large surface export is impractical")
+
+
+def validate_manifest(payload: Mapping[str, object]) -> None:
+    _require(payload.get("schemaVersion") == SCHEMA_VERSION, "unsupported manifest schema")
+    model = cast(Mapping[str, object], payload.get("model"))
+    _require(model.get("identifier") == MODEL_IDENTIFIER, "unexpected model identifier")
+    _require(payload.get("defaultPopulation") == POPULATION, "default population disagrees")
+    populations = cast(list[Mapping[str, object]], payload["populations"])
+    exported = tuple(_integer(item["agents"], "population") for item in populations)
+    _require(exported == SUPPORTED_POPULATIONS, "public population options disagree")
+    _finite_tree(payload)
 
 
 def validate_story(payload: Mapping[str, object]) -> None:
-    """Validate schema, canonical results, trajectories, and landscape topology."""
+    """Validate one population bundle independently of the browser schema."""
 
-    _require(payload.get("schemaVersion") == SCHEMA_VERSION, "unsupported schema version")
-    model = cast(Mapping[str, object], payload.get("model"))
-    _require(model.get("identifier") == MODEL_IDENTIFIER, "unexpected model identifier")
-    _require(model.get("agentCount") == 80, "model must contain eighty agents")
+    _require(payload.get("schemaVersion") == SCHEMA_VERSION, "unsupported bundle schema")
+    _require(payload.get("modelIdentifier") == MODEL_IDENTIFIER, "unexpected model identifier")
+    population = _integer(payload.get("population"), "population")
+    _require(population in SUPPORTED_POPULATIONS, "unsupported bundle population")
+    waiting = cast(Mapping[str, object], payload["waitingState"])
+    _require(waiting.get("kind") == "preExperiment", "waiting state kind disagrees")
+    _require(waiting.get("waitingCount") == population, "waiting count disagrees")
+    _require(waiting.get("metricsAvailable") is False, "waiting state fabricates metrics")
+    _require(
+        set(cast(Mapping[str, object], waiting["edgeLoads"]).values()) == {0},
+        "waiting edge loads must all be zero",
+    )
     _finite_tree(payload)
-    _validate_exact(cast(Mapping[str, object], payload["exactAnalysis"]))
-    _validate_landscape(cast(Mapping[str, object], payload["potentialLandscape"]))
-    experiments = cast(Mapping[str, object], payload["experiments"])
-    scenarios = cast(Mapping[str, object], experiments["scenarios"])
-    for scenario in Scenario:
-        game = BraessGame(scenario)
-        scenario_block = cast(Mapping[str, object], scenarios[scenario.value])
-        for learner_key in ("qLearning", "hedge", "bestResponse"):
-            learner = cast(Mapping[str, object], scenario_block[learner_key])
-            seeds = cast(list[int], learner["seedList"])
-            _require(len(seeds) == len(set(seeds)) and len(seeds) > 0, "seed list is invalid")
-            selection = cast(Mapping[str, object], learner["representativeSelection"])
-            _require(
-                _integer(selection["representativeSeed"], "representative seed") in seeds,
-                "representative seed is not a candidate",
-            )
-            representative = cast(Mapping[str, object], learner["representative"])
-            snapshots = cast(list[Mapping[str, object]], representative["snapshots"])
-            episodes = [_integer(snapshot["episode"], "snapshot episode") for snapshot in snapshots]
-            _require(
-                episodes == sorted(set(episodes)), "snapshot episodes are not strictly monotone"
-            )
-            for snapshot in snapshots:
-                _validate_snapshot(snapshot, game)
-            summary = cast(Mapping[str, object], representative["summary"])
-            final_counts = tuple(cast(list[int], summary["finalGreedyRouteCounts"]))
-            game.validate_counts(final_counts)
-            _require(
-                math.isclose(
-                    _number(summary["exploitability"], "final exploitability"),
-                    float(game.exploitability(final_counts)),
-                ),
-                "final exploitability disagrees",
-            )
+    _validate_exact(cast(Mapping[str, object], payload["exactAnalysis"]), population)
+    _validate_scenario_states(cast(Mapping[str, object], payload["scenarioStates"]), population)
+    _validate_learning(cast(Mapping[str, object], payload["learning"]), population)
+    _validate_landscape(cast(Mapping[str, object], payload["potentialLandscape"]), population)
+    _require(
+        ("comparison" in payload) == (population == POPULATION),
+        "comparison scope must be confined to the default study",
+    )
+
+
+def _load_object(path: Path) -> dict[str, object]:
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(loaded, dict):
+        raise StoryValidationError(f"{path} root must be an object")
+    return cast(dict[str, object], loaded)
 
 
 def validate_story_file(path: str) -> dict[str, object]:
-    loaded = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(loaded, dict):
-        raise StoryValidationError("story root must be an object")
-    payload = cast(dict[str, object], loaded)
+    payload = _load_object(Path(path))
     validate_story(payload)
     return payload
+
+
+def validate_export_directory(path: str | Path) -> dict[int, dict[str, object]]:
+    directory = Path(path)
+    manifest = _load_object(directory / "manifest-v2.json")
+    validate_manifest(manifest)
+    result: dict[int, dict[str, object]] = {}
+    for population in SUPPORTED_POPULATIONS:
+        payload = _load_object(directory / f"population-{population}-v2.json")
+        validate_story(payload)
+        result[population] = payload
+    return result

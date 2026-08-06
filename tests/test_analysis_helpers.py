@@ -14,21 +14,21 @@ from congestion_marl.types import Scenario
 
 def test_analysis_wrappers_preserve_exact_values() -> None:
     game = BraessGame(Scenario.OPEN)
-    equilibrium = (0, 0, 80)
-    optimum = (35, 35, 10)
+    equilibrium = (0, 0, 100)
+    optimum = (44, 44, 12)
     assert cost_exploitability(game, equilibrium) == 0
     assert is_pure_nash(game, equilibrium)
-    assert rosenthal_potential(game, equilibrium) == 3240
-    assert perceived_potential(game, equilibrium) == 3240
-    assert physical_social_cost(game, optimum) == 5175
-    assert average_physical_latency(game, optimum) == Fraction(1035, 16)
-    assert normalized_count_distance(equilibrium, optimum, 80) == 0.875
+    assert rosenthal_potential(game, equilibrium) == 4040
+    assert perceived_potential(game, equilibrium) == 4040
+    assert physical_social_cost(game, optimum) == Fraction(32344, 5)
+    assert average_physical_latency(game, optimum) == Fraction(8086, 125)
+    assert normalized_count_distance(equilibrium, optimum, 100) == 0.88
     require_finite([0.0, 1.0], "finite sample")
 
 
 def test_diagnostics_and_seed_controls_reject_invalid_inputs() -> None:
     with pytest.raises(ValueError):
-        normalized_count_distance((1,), (1, 0), 80)
+        normalized_count_distance((1,), (1, 0), 100)
     with pytest.raises(ValueError, match="NaN"):
         require_finite([float("nan")], "sample")
     with pytest.raises(ValueError):
@@ -38,7 +38,7 @@ def test_diagnostics_and_seed_controls_reject_invalid_inputs() -> None:
 
 def test_canonical_snapshot_schedule_has_exact_endpoints_and_target_size() -> None:
     indices = snapshot_episode_indices(5000)
-    assert indices[0] == 0
+    assert indices[0] == 1
     assert indices[-1] == 5000
-    assert 180 <= len(indices) <= 300
+    assert 180 <= len(indices) <= 260
     assert indices == tuple(sorted(set(indices)))

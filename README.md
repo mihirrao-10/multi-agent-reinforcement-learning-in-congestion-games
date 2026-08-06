@@ -4,17 +4,15 @@
 
 [Live interactive essay](https://mihirrao-10.github.io/multi-agent-reinforcement-learning-in-congestion-games/) · [Experiment methodology](docs/experiment-methodology.md) · [Interview guide](docs/interview-guide.md) · [Course map](docs/course-map.md)
 
-![The live essay showing the braided Braess network beside the opening argument](docs/assets/site-hero.png)
+One hundred independent tabular learners repeatedly choose complete routes through an atomic Braess network. The zero-cost central link is privately attractive, so the untolled game has an exact equilibrium in which every agent uses it. Average latency is then 80, compared with 64.688 at the physical optimum. Removing the link lowers equilibrium latency to 65. Discrete marginal-cost tolls instead align equilibrium with the physical optimum.
 
-Eighty independent tabular learners repeatedly choose routes through one atomic Braess network. The free central link is privately attractive, so the untolled game stabilizes with every agent using it. That outcome is a pure Nash equilibrium, but its average latency is 80 rather than the physical optimum's 64.6875. Closing the link lowers equilibrium latency to 65. Discrete marginal-cost tolls instead move the equilibrium to the physical optimum.
+The population can be changed honestly to 100, 1,000, or 10,000. Every preset uses the same population-normalized game, exact population-specific equilibrium and welfare analysis, and a separately computed independent-Q trajectory. The larger displays use bounded weighted cohorts and sampled potential surfaces; their metrics and exact markers remain tied to integer count states.
 
-The repository's thesis is narrow: competent individual learning can faithfully discover inefficient incentives. Learning quality and incentive quality are different questions.
+The thesis is narrow: capable individual learning can faithfully discover inefficient incentives. Learning quality and incentive quality are different questions.
 
-This is a completely audited computational study, not a generic MARL benchmark. Python defines the game, validates its exact mathematics, runs every learner, and exports an immutable story bundle. TypeScript validates that bundle again and presents it through one Three.js scene, native SVG charts, KaTeX, and an SVG fallback.
+## Model
 
-## Canonical model
-
-The game has 80 labeled, unsplittable agents with common source `S` and destination `T`. An action is one complete route:
+There are `N` labeled, unsplittable agents with source `S` and destination `T`. One action is one complete route:
 
 | Code | Route | Edges |
 | --- | --- | --- |
@@ -22,126 +20,140 @@ The game has 80 labeled, unsplittable agents with common source `S` and destinat
 | `L` | Lower | `S -> V -> T` |
 | `Z` | Shortcut | `S -> U -> V -> T` |
 
-Physical edge latencies at integer load `x` are:
+For integer edge load `x`, the physical latencies are:
 
 | Edge | Latency |
 | --- | ---: |
-| `S -> U` | `x / 2` |
+| `S -> U` | `40x/N` |
 | `U -> T` | `45` |
 | `S -> V` | `45` |
-| `V -> T` | `x / 2` |
+| `V -> T` | `40x/N` |
 | `U -> V` | `0` |
 
-For route counts `(x_U, x_L, x_Z)`, the variable edge loads are `x_U + x_Z` and `x_L + x_Z`. The route costs are
+For route counts `(x_U, x_L, x_Z)` summing to `N`,
 
 ```text
-J_U = (x_U + x_Z) / 2 + 45
-J_L = 45 + (x_L + x_Z) / 2
-J_Z = (x_U + x_Z) / 2 + (x_L + x_Z) / 2
+J_U = 40(x_U + x_Z)/N + 45
+J_L = 45 + 40(x_L + x_Z)/N
+J_Z = 40(x_U + x_Z)/N + 40(x_L + x_Z)/N
 ```
 
-Reward is negative perceived route cost. Physical social cost is the sum of physical travel latencies across agents.
+Reward is negative perceived route cost. Physical social cost is the sum of physical travel latency across agents. Toll payments affect perceived cost but are treated as transfers outside that physical objective.
 
-## Exact results
+## Exact default results
 
-Exact rational enumeration reduces the open game from `3^80` labeled profiles to `C(82, 2) = 3,321` symmetric count states. The closed game has 81 states. Every feasible unilateral deviation uses remove-then-add accounting: remove the candidate agent from its current route, add it to the proposed route, and recompute affected loads.
+All canonical arithmetic uses `Fraction`, including remove-then-add deviations. At `N = 100`:
 
-| Scenario | Unique pure Nash | Physical social cost | Average latency | Unique physical optimum |
-| --- | ---: | ---: | ---: | ---: |
-| Shortcut open | `(0, 0, 80)` | `6400` | `80` | `(35, 35, 10)` |
-| Shortcut removed | `(40, 40)` | `5200` | `65` | `(40, 40)` |
-| Shortcut tolled | `(35, 35, 10)` | `5175` | `64.6875` | `(35, 35, 10)` |
+| Scenario | Pure Nash equilibrium | Physical social cost | Average latency | Physical optimum |
+| --- | --- | ---: | ---: | --- |
+| Shortcut open | `(0, 0, 100)` | `8000` | `80` | `(44, 44, 12)` |
+| Shortcut removed | `(50, 50)` | `6500` | `65` | `(50, 50)` |
+| Shortcut tolled | `(44, 44, 12)` | `6468.8` | `64.688` | `(44, 44, 12)` |
 
-The open optimum has physical social cost `5175` and average latency `64.6875`. Because the untolled equilibrium is unique,
+The open optimum cost is `32344/5`. Therefore
 
 ```text
-Price of Anarchy = Price of Stability = 6400 / 5175 = 256 / 207
+Price of Anarchy = Price of Stability = 5000/4043
 ```
 
-This is approximately `1.236715`. Removing the shortcut lowers equilibrium average latency by `18.75%`.
-
-Rosenthal's potential is evaluated exactly as
+This is approximately `1.236705`. The code computes every tied optimum or equilibrium rather than assuming uniqueness. For example, `N = 1,000` has four adjacent tied open optima:
 
 ```text
-Phi = sum(k/2, k=1..x_U+x_Z)
-    + 45(x_U + x_L)
-    + sum(k/2, k=1..x_L+x_Z)
+(437, 437, 126)
+(437, 438, 125)
+(438, 437, 125)
+(438, 438, 124)
 ```
 
-The implementation verifies `19,440` feasible unilateral deviations in each open three-route scenario and `160` in the closed two-route scenario. For every deviation, the player's perceived-cost change equals the potential change exactly. Strict asynchronous best response therefore descends and terminates without cycling.
+### Efficient exact analysis
 
-### Discrete marginal-cost tolls
+The open and tolled objectives separate into two identical discrete-convex functions of `x_U` and `x_L`. Scanning one integer component from `0` through `N` finds the complete component minimizer set. Its feasible Cartesian product gives every global optimum, and the same reduction applied to the exact potential gives every equilibrium. The closed game is a one-dimensional scan.
 
-The two variable edges receive
+This is exact `O(N)` analysis. It reports the correct count-state totals without materializing them:
+
+| Population | Open count states | Displayed surface |
+| ---: | ---: | ---: |
+| 100 | 5,151 | all 5,151 vertices |
+| 1,000 | 501,501 | 2,145 deterministic samples |
+| 10,000 | 50,015,001 | 2,145 deterministic samples |
+
+Small populations are exhaustively cross-checked against the reduced algorithm for all scenarios, all equilibria, all optima, efficiency ratios, exploitability, potential changes, and toll identities.
+
+### Potential and tolls
+
+Rosenthal potential is
 
 ```text
-tau(x) = (x - 1) [c(x) - c(x - 1)] = (x - 1) / 2
+Phi(x) = sum_e sum(k=1..x_e) c_e(k).
 ```
 
-The constant edges and zero-cost shortcut receive zero toll. Toll payments change private perceived cost but are transfers outside the physical-latency objective. Across all 3,321 count states, the perceived Rosenthal potential telescopes to physical social cost:
+For every unilateral deviation, its exact change equals the deviating agent's exact perceived-cost change. The strict best-response baseline therefore descends and terminates.
+
+The two variable edges receive the discrete marginal toll
 
 ```text
-sum(k=1..x_e) [c_e(k) + tau_e(k)] = x_e c_e(x_e)
+tau_N(x) = (x - 1)[c_N(x) - c_N(x - 1)] = 40(x - 1)/N.
 ```
 
-The resulting equilibrium `(35, 35, 10)` is specific to this authored finite instance. It is not a universal uniqueness claim about atomic congestion games.
-
-## Learning experiments
-
-### Independent Q-learning
-
-Each agent owns a separate tabular row. There is no parameter sharing, centralized controller, centralized critic, replay buffer, or neural network. Three or two route actions are small enough that a table is the transparent choice.
-
-All 80 actions are selected before any reward is evaluated. Each agent then updates only its selected route value:
+Then
 
 ```text
-Q_i(a_i) <- Q_i(a_i) + alpha [r_i - Q_i(a_i)]
+sum(k=1..x) [c_N(k) + tau_N(k)] = x c_N(x),
 ```
 
-`gamma = 0` because each episode is a one-stage repeated decision, not a continuing control trajectory. The public configuration uses 5,000 episodes, `alpha = 0.15`, zero initial values, and epsilon `max(0.01, 0.80 * 0.999^(t-1))`. The final learned policy is evaluated separately at epsilon zero.
+so tolled perceived potential equals physical social cost exactly.
 
-The canonical 64-seed independent-Q results are empirical:
+## Learning studies
 
-| Scenario | Representative seed | Final greedy counts | Exploitability |
-| --- | ---: | ---: | ---: |
-| Open | `1934370` | `(0, 0, 80)` | `0` |
-| Closed | `1248724` | `(40, 40)` | `0` |
-| Tolled | `82370885` | `(35, 35, 10)` | `0` |
+Each agent owns a separate tabular Q row. There is no parameter sharing, centralized controller, critic, replay buffer, or neural network. All agents select actions before any reward is evaluated, and each updates only the selected entry:
 
-The open and closed final count vectors were exact across all 64 Q-learning seeds except one closed run at normalized distance `0.0125`; the export retains every per-seed summary and aggregate rather than hiding variation. Tolled Q-learning had mean physical social cost `5178.5625`, population standard deviation `8.7180`, and standard error `1.0898` across 64 deterministic seeds.
+```text
+Q_i(a_i) <- Q_i(a_i) + alpha [r_i - Q_i(a_i)].
+```
 
-### Baselines
+`gamma = 0` because an episode is a one-stage repeated decision. The canonical schedule uses `alpha = 0.15`, zero initial values, and epsilon `max(0.01, 0.80 * 0.999^(t-1))`. Final policies are evaluated separately at epsilon zero with an isolated random stream.
 
-- Asynchronous strict best response uses exact unilateral costs, one labeled agent at a time, and 16 seeded update orders. Every accepted move is checked against exact potential descent.
-- Hedge gives each agent the full counterfactual route-cost vector, uses stable log weights with `eta = 0.18`, and runs 64 seeds per scenario. Low external regret does not imply last-iterate pure-Nash convergence.
+The 100-agent comparison retains 64 independent-Q seeds and 64 Hedge seeds per scenario, plus 16 strict-best-response orders. Larger presets retain one clearly labeled deterministic audited Q-learning run per scenario:
 
-Information assumptions differ deliberately. Q-learning updates from experienced selected-route reward only. Best response has exact model access. Hedge has full counterfactual feedback.
+| Population | Episodes | Public study scope | Open training endpoint | Epsilon-zero greedy evaluation |
+| ---: | ---: | --- | --- | --- |
+| 100 | 5,000 | 64-seed canonical comparison | `(0, 0, 100)` | `(0, 0, 100)` |
+| 1,000 | 3,200 | one audited scale run | `(7, 9, 984)` | `(0, 0, 1000)` |
+| 10,000 | 2,400 | one audited scale run | `(258, 257, 9485)` | `(0, 0, 10000)` |
 
-## Scientific guardrails
+The training endpoint and epsilon-zero evaluation answer different empirical questions and remain separate in the export. Uncertainty from the one-run scale studies is never compared as if it had 64 replications.
 
-- Exact enumeration supplies equilibrium, optimum, exploitability, potential, Price of Anarchy, and Price of Stability benchmarks.
-- Independent Q-learning is evaluated empirically against those exact benchmarks. The project does not transfer the classic single-agent Q-learning convergence theorem unchanged to a nonstationary multi-agent environment.
-- External regret is computed with exact counterfactual remove-then-add costs. The project reports it but does not claim that a low value proves last-iterate Nash convergence.
-- The representative run is a final-count medoid, not the prettiest animation. Pairwise L1 count distance is minimized; lower exploitability and then smaller seed break ties.
-- The browser never trains agents or invents numerical states. Python exports all numerical results. TypeScript validates and presents them.
-- The renderer may visually interpolate geometry, camera position, or material properties between exported states. Every textual metric belongs to one exact exported snapshot.
-- Particle motion encodes route assignment and relative travel cost. It is not a microscopic or continuous-time traffic simulator.
+Best response has exact model access. Hedge receives full counterfactual feedback. Independent Q-learning sees only experienced selected-route reward. Those information assumptions are intentionally different.
+
+## Population-aware public data
+
+The browser never trains agents or computes the 10,000-agent exact analysis. Python writes schema `2.0.0` data:
+
+```text
+web/public/data/manifest-v2.json
+web/public/data/population-100-v2.json
+web/public/data/population-1000-v2.json
+web/public/data/population-10000-v2.json
+```
+
+The initial page fetches only the manifest and 100-agent bundle. Larger bundles load on selection. Snapshots store aggregate route counts, derived edge loads, route costs, objectives, and diagnostics, not population-sized assignment arrays. Large surfaces are fixed-resolution samples of the exact formula, while equilibrium, optimum, active-profile, and path markers remain exact integer states.
+
+At 100 agents, one visible bead represents one agent. Larger presets render at most 180 beads allocated by deterministic largest remainder. Every positive route receives a bead, and exact represented-agent weights sum to `N`. Cohorts affect rendering only, never metrics.
 
 ## Architecture
 
 ```text
-Python exact model and experiments
-  -> deterministic schema 1.0.0 JSON
-  -> Zod and numerical consistency validation
-  -> typed story state machine
-  -> one Three.js renderer plus native SVG and KaTeX
+Python exact model and vectorized experiments
+  -> deterministic manifest and population bundles
+  -> independent Python export validation
+  -> Zod and TypeScript numerical re-derivation
+  -> progressive journey state machine
+  -> Three.js, native SVG fallback, SVG charts, and KaTeX
 ```
 
-The potential surface contains all 3,321 states and 6,400 deterministically indexed triangles. Its displayed height is an affine normalization with a shared scale across original potential and tolled potential. Raw objective values remain attached to every vertex.
+Randomness is isolated with NumPy `SeedSequence` and PCG64. Stable ordering and finite-number serialization make canonical exports byte reproducible. Wall-clock measurements and git state are excluded from canonical JSON.
 
-Randomness is isolated with NumPy `SeedSequence` and PCG64. Separate child streams cover exploration, greedy tie-breaking, scenario initialization, aggregate selection, representative playback, and final evaluation. Run seeds are derived from base seed `20260804` in scenario and learner namespaces.
-
-## Installation
+## Installation and commands
 
 Python 3.12 or newer and Node 20 or newer are required.
 
@@ -151,46 +163,23 @@ cd multi-agent-reinforcement-learning-in-congestion-games
 make setup
 ```
 
-The canonical reproducibility toolchain pins Python 3.12.13 in CI and NumPy 2.5.1. Development extras add pytest, coverage, Ruff, and mypy.
-
-## CLI
-
 ```bash
-# One deterministic learner run
-congestion-marl simulate --scenario braess-open --learner q-learning --seed 20260804
+# Exact analysis at any supported population
+congestion-marl enumerate --scenario braess-open --agents 10000 --json
 
-# Exact count-state analysis
-congestion-marl enumerate --scenario braess-open --json
+# One deterministic learner
+congestion-marl simulate --scenario braess-open --learner q-learning --agents 100
 
-# Smaller multi-learner comparison
-congestion-marl compare --seeds 4 --episodes 500
-
-# Full deterministic browser export
-congestion-marl export --output web/public/data/story-v1.json
-
-# Independent schema and numerical validation
-congestion-marl validate web/public/data/story-v1.json
-
-# Warmup-based implementation profiling
-congestion-marl benchmark --output benchmarks/measurements.json
-```
-
-## Deterministic data regeneration
-
-The committed public bundle is [web/public/data/story-v1.json](web/public/data/story-v1.json). It includes the model, exact analyses, all seed summaries, aggregates, representative trajectories, learner state, 253 snapshots per representative 5,000-episode learner run, complete landscape geometry, benchmark metadata, and provenance.
-
-```bash
+# Regenerate and independently validate every public bundle
 make export
+make validate
 
-congestion-marl export --output /tmp/story-a.json
-congestion-marl export --output /tmp/story-b.json
-cmp /tmp/story-a.json /tmp/story-b.json
-cmp /tmp/story-a.json web/public/data/story-v1.json
+# Python formatting, lint, strict types, coverage, export validation,
+# frontend checks, production build, and Chromium end-to-end tests
+make check
 ```
 
-Stable key ordering, compact finite-number JSON, canonical rounding to 12 decimal places, fixed seed namespaces, excluded wall-clock runtime, and an excluded git hash make the canonical export byte reproducible across the pinned Linux and macOS toolchains.
-
-## Web development
+For local web work:
 
 ```bash
 cd web
@@ -198,71 +187,48 @@ npm install
 npm run dev
 ```
 
-The Vite base path is the repository name so the same production bundle works on GitHub Pages. WebGL failure can be tested deliberately with `?forceFallback=1`.
-
-## Validation and tests
-
-```bash
-# Python formatting, lint, strict types, tests, coverage, export validation,
-# frontend formatting, lint, unit tests, links, production build, and Playwright
-make check
-
-# Individual commands
-make lint
-make typecheck
-make test
-make validate
-make web-check
-make e2e
-```
-
-The Python suite covers exact route costs, all count states, every feasible deviation, equilibrium, welfare, toll identities, learners, random-stream isolation, deterministic exports, and CLI behavior. The TypeScript suite covers schema and numerical re-derivation, geometry, color and radius mappings, charts, snapshots, and state transitions. Chromium Playwright tests cover the ten-chapter narrative, exact playback, controls, keyboard camera use, reduced motion, fallback, accessibility, and 1440, 1280, tablet, and mobile layouts.
+Use `?forceFallback=1` to exercise the native SVG path.
 
 ## Deployment
 
-`ci.yml` validates Python and web code on pushes and pull requests. `deploy-pages.yml` builds `web/dist`, uploads the GitHub Pages artifact, and deploys from the `main` branch. No generated `dist` directory is committed.
-
-After deployment, the public desktop and mobile compositions can be checked with:
+GitHub Actions runs Python and web validation on every push and pull request. The Pages workflow validates committed population bundles, builds the repository-base-path production artifact, and deploys `main`.
 
 ```bash
 cd web
-npm run verify:deployment -- https://mihirrao-10.github.io/multi-agent-reinforcement-learning-in-congestion-games/ /tmp/deployment-check
+npm run verify:deployment -- \
+  https://mihirrao-10.github.io/multi-agent-reinforcement-learning-in-congestion-games/ \
+  /tmp/congestion-deployment-check
 ```
 
-## Limitations
+## Scientific guardrails
 
-- This is one atomic symmetric routing game with 80 agents sharing one origin and destination.
-- Each agent chooses one complete route per episode from two or three available routes.
-- There is no continuous-time traffic, queueing, or physical road-capacity model beyond the authored latency functions.
-- Route costs are mathematical latency functions; particles are an assignment visualization.
-- Q-learning is tabular and independent. Other adapting agents make each learner's environment nonstationary, so no general independent-Q convergence theorem is claimed.
-- Behavior can depend on hyperparameters and exploration.
-- Hedge receives full counterfactual information; best response receives exact model information.
-- Toll conclusions belong to this authored finite instance, and toll payments are treated as transfers.
-- This is an educational computational study, not transportation-policy advice or a real traffic forecast.
-- All numerical claims belong to the stated model.
+- Exact equilibrium and welfare claims come from exact analysis, not from learner outcomes.
+- Independent-Q outcomes are empirical. Classic single-agent convergence theory is not transferred unchanged to the nonstationary multi-agent setting.
+- Low external regret concerns time-average play and does not imply last-iterate pure Nash convergence.
+- A representative run is selected by a declared final-count medoid rule, then exploitability, then seed.
+- Visual geometry may interpolate. Every displayed numerical metric belongs to one exported snapshot or exact profile.
+- Particle motion is a route and relative-latency encoding, not a microscopic traffic simulation.
+- This is an educational computational study, not a transportation forecast or policy recommendation.
 
 ## References
 
 - Robert W. Rosenthal, [A class of games possessing pure-strategy Nash equilibria](https://doi.org/10.1007/BF01737559), *International Journal of Game Theory* 2, 65-67, 1973.
-- Dietrich Braess, Anna Nagurney, and Tina Wakolbinger, [On a Paradox of Traffic Planning](https://doi.org/10.1287/trsc.1050.0127), *Transportation Science* 39(4), 446-450, 2005 English translation of the 1968 paper.
+- Dietrich Braess, Anna Nagurney, and Tina Wakolbinger, [On a Paradox of Traffic Planning](https://doi.org/10.1287/trsc.1050.0127), *Transportation Science* 39(4), 446-450, 2005 English translation.
 - Tim Roughgarden and Éva Tardos, [How Bad Is Selfish Routing?](https://doi.org/10.1145/506147.506153), *Journal of the ACM* 49(2), 236-259, 2002.
 - Christopher J. C. H. Watkins and Peter Dayan, [Q-learning](https://doi.org/10.1007/BF00992698), *Machine Learning* 8, 279-292, 1992.
 - Yoav Freund and Robert E. Schapire, [A Decision-Theoretic Generalization of On-Line Learning and an Application to Boosting](https://doi.org/10.1006/jcss.1997.1504), *Journal of Computer and System Sciences* 55(1), 119-139, 1997.
 
-See the [course map](docs/course-map.md) for authoritative books, notes, conceptual boundaries, and the project-specific versus established-theory split.
-
 ## Repository map
 
 ```text
-src/congestion_marl/       exact game, learners, experiments, export, CLI
+src/congestion_marl/       game, exact analysis, learners, export, CLI
 tests/                     Python mathematical and implementation tests
-benchmarks/                profiling scripts and measured metadata
+benchmarks/                focused performance checks
 scripts/                   deterministic export helper
-web/src/                   validated story, charts, Three.js, fallback, styles
-web/tests/                 Vitest unit and numerical consistency tests
-web/e2e/                   Playwright behavior, accessibility, and viewport tests
-web/public/data/           authoritative versioned story export
-docs/                      methodology, interview guide, course map, assets
+web/src/                   journey, charts, Three.js, fallback, styles
+web/tests/                 Vitest units and browser-data consistency tests
+web/e2e/                   Playwright behavior, accessibility, and viewports
+web/public/data/           authoritative manifest and population bundles
+docs/                      methodology, interview guide, course map
 .github/workflows/         CI and GitHub Pages deployment
 ```

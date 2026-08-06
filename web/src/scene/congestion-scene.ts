@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import type { StorySnapshot } from "../data/story-schema";
+import type { NetworkPresentation } from "../data/story-schema";
 import { AgentParticles } from "./agent-particles";
 import { FlowEdge } from "./flow-edge";
 
@@ -29,7 +29,9 @@ export class CongestionScene {
   private readonly edges: Record<EdgeId, FlowEdge>;
   private readonly particles: AgentParticles;
   private readonly tollBands: THREE.Mesh[] = [];
-  private snapshot: StorySnapshot | null = null;
+  private snapshot: NetworkPresentation | null = null;
+  private population = 100;
+  private waiting = true;
   private shortcutOpen = true;
   private focusedEdges = new Set<EdgeId>();
 
@@ -80,9 +82,15 @@ export class CongestionScene {
     this.group.add(this.particles.mesh);
   }
 
-  setSnapshot(snapshot: StorySnapshot): void {
+  setPresentation(
+    snapshot: NetworkPresentation | null,
+    population: number,
+    waiting: boolean,
+  ): void {
     this.snapshot = snapshot;
-    this.particles.setSnapshot(snapshot);
+    this.population = population;
+    this.waiting = waiting;
+    this.particles.setPresentation(snapshot, population, waiting);
     this.updateEdges();
   }
 
@@ -148,13 +156,13 @@ export class CongestionScene {
   }
 
   private updateEdges(): void {
-    if (!this.snapshot) return;
     for (const [identifier, edge] of Object.entries(this.edges) as [
       EdgeId,
       FlowEdge,
     ][]) {
       edge.update(
-        this.snapshot.edgeLoads[identifier] ?? 0,
+        this.waiting ? 0 : (this.snapshot?.edgeLoads[identifier] ?? 0),
+        this.population,
         this.focusedEdges.has(identifier),
         identifier !== "UV" || this.shortcutOpen,
       );
@@ -165,22 +173,22 @@ export class CongestionScene {
     for (const [identifier, position] of Object.entries(NODE_POSITIONS)) {
       const isEndpoint = identifier === "S" || identifier === "T";
       const node = new THREE.Mesh(
-        new THREE.SphereGeometry(isEndpoint ? 0.095 : 0.078, 24, 18),
+        new THREE.SphereGeometry(isEndpoint ? 0.115 : 0.098, 28, 22),
         new THREE.MeshStandardMaterial({
-          color: isEndpoint ? "#fff1d0" : "#f4b942",
-          emissive: isEndpoint ? "#ffb24b" : "#c66225",
-          emissiveIntensity: isEndpoint ? 1.5 : 0.85,
-          roughness: 0.4,
-          metalness: 0.08,
+          color: isEndpoint ? "#fff9e8" : "#ffe8b0",
+          emissive: isEndpoint ? "#ffb84d" : "#ff9b39",
+          emissiveIntensity: isEndpoint ? 2.6 : 2.15,
+          roughness: 0.26,
+          metalness: 0.02,
         }),
       );
       node.position.copy(position);
       const halo = new THREE.Mesh(
-        new THREE.SphereGeometry(isEndpoint ? 0.17 : 0.13, 20, 14),
+        new THREE.SphereGeometry(isEndpoint ? 0.205 : 0.175, 20, 14),
         new THREE.MeshBasicMaterial({
           color: isEndpoint ? "#ffb24b" : "#ff7a3d",
           transparent: true,
-          opacity: 0.08,
+          opacity: 0.1,
           depthWrite: false,
         }),
       );

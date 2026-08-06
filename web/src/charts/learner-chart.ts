@@ -9,47 +9,56 @@ export function createLearnerChart(
   container: HTMLElement,
   story: StoryData,
 ): void {
+  const comparison = story.comparison;
+  if (!comparison) {
+    container.replaceChildren();
+    return;
+  }
   const width = 520;
   const height = 220;
-  const block = story.experiments.scenarios["braess-tolled"];
+  const block = comparison.scenarios["braess-tolled"];
   const learners = [
-    { label: "Q-learning", summary: block.qLearning.representative.summary },
+    { label: "Q-learning", summary: block.qLearning.representativeSummary },
     {
       label: "best response",
-      summary: block.bestResponse.representative.summary,
+      summary: block.bestResponse.representativeSummary,
     },
-    { label: "Hedge", summary: block.hedge.representative.summary },
+    { label: "Hedge", summary: block.hedge.representativeSummary },
   ];
-  const socialX = linearScale([5175, 5185], [155, 330]);
-  const exploitX = linearScale(
-    [0, Math.max(1, ...learners.map((item) => item.summary.exploitability))],
-    [370, 500],
+  const costs = learners.map((item) => item.summary.physicalSocialCost);
+  const minimumCost = Math.floor(Math.min(...costs));
+  const maximumCost = Math.max(minimumCost + 1, Math.ceil(Math.max(...costs)));
+  const maximumExploitability = Math.max(
+    1,
+    ...learners.map((item) => item.summary.exploitability),
   );
+  const socialX = linearScale([minimumCost, maximumCost], [155, 330]);
+  const exploitX = linearScale([0, maximumExploitability], [370, 500]);
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}` });
   appendTitleAndDescription(
     svg,
-    "Tolled representative learner comparison",
-    "Separate labeled scales compare physical social cost and final exploitability. The metrics are not merged onto one scale.",
+    "One-hundred-agent tolled learner comparison",
+    "Separate scales compare exported physical social cost and final exploitability for three methods with different information.",
   );
   const socialLabel = svgElement("text", {
     x: 155,
     y: 20,
     class: "chart-axis",
   });
-  socialLabel.textContent = "physical social cost (5175 to 5185)";
+  socialLabel.textContent = `social cost (${minimumCost} to ${maximumCost})`;
   const exploitLabel = svgElement("text", {
     x: 370,
     y: 20,
     class: "chart-axis",
   });
-  exploitLabel.textContent = "exploitability (0 to 1)";
+  exploitLabel.textContent = `exploitability (0 to ${maximumExploitability})`;
   svg.append(socialLabel, exploitLabel);
   learners.forEach((learner, index) => {
     const y = 62 + index * 54;
     const label = svgElement("text", { x: 12, y: y + 4, class: "chart-label" });
     label.textContent = learner.label;
     const socialLine = svgElement("line", {
-      x1: socialX(5175),
+      x1: socialX(minimumCost),
       x2: socialX(learner.summary.physicalSocialCost),
       y1: y,
       y2: y,

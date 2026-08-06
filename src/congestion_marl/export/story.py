@@ -1,19 +1,24 @@
-"""Assemble the complete authoritative browser data bundle."""
+"""Assemble deterministic population-specific browser bundles and manifest."""
 
 from __future__ import annotations
 
 import hashlib
-import json
-import platform
+from itertools import pairwise
 from pathlib import Path
 from typing import cast
 
 import numpy as np
 
 from congestion_marl import __version__
-from congestion_marl.analysis.enumeration import analyze_scenario, enumerate_count_states
-from congestion_marl.config import ExperimentConfig
-from congestion_marl.export.json_writer import deterministic_json_bytes
+from congestion_marl.analysis.enumeration import analyze_scenario, weak_compositions
+from congestion_marl.config import (
+    BASE_SEED,
+    POPULATION,
+    SUPPORTED_POPULATIONS,
+    ExperimentConfig,
+    experiment_config_for_population,
+)
+from congestion_marl.export.json_writer import deterministic_json_bytes, write_deterministic_json
 from congestion_marl.export.schema import (
     MODEL_IDENTIFIER,
     ROUTE_CODES,
@@ -22,47 +27,39 @@ from congestion_marl.export.schema import (
 )
 from congestion_marl.games.braess import BraessGame
 from congestion_marl.games.network import EDGES, NODES, ROUTE_EDGES
-from congestion_marl.simulation.engine import counts_from_action_indices
-from congestion_marl.simulation.experiments import run_experiment_matrix
+from congestion_marl.learners.best_response import strict_best_response_count_path
+from congestion_marl.simulation.experiments import run_experiment_matrix, run_q_learning_study
 from congestion_marl.simulation.seeds import seed_policy
 from congestion_marl.types import ExactScenarioAnalysis, Route, Scenario
 
+LANDSCAPE_RESOLUTION = {100: 100, 1_000: 64, 10_000: 64}
+MAX_DISPLAY_PATH_POINTS = 144
 
-def _exact_analysis_payload(analysis: ExactScenarioAnalysis) -> dict[str, object]:
-    game = BraessGame(analysis.scenario)
-    equilibria = []
-    for state in analysis.equilibria:
-        equilibria.append(
-            {
-                "routeCounts": list(state),
-                "physicalSocialCost": exact_number(game.social_cost(state)),
-                "averagePhysicalLatency": exact_number(game.social_cost(state) / game.population),
-                "rosenthalPotential": exact_number(game.rosenthal_potential(state)),
-                "perceivedPotential": exact_number(game.perceived_potential(state)),
-                "exploitability": exact_number(game.exploitability(state)),
-            }
-        )
-    optima = []
-    for state in analysis.social_optima:
-        optima.append(
-            {
-                "routeCounts": list(state),
-                "physicalSocialCost": exact_number(game.social_cost(state)),
-                "averagePhysicalLatency": exact_number(game.social_cost(state) / game.population),
-                "rosenthalPotential": exact_number(game.rosenthal_potential(state)),
-                "exploitability": exact_number(game.exploitability(state)),
-            }
-        )
+
+def _exact_analysis_payload(analysis: ExactScenarioAnalysis, population: int) -> dict[str, object]:
+    game = BraessGame(analysis.scenario, population)
+
+    def profile(state: tuple[int, ...]) -> dict[str, object]:
+        return {
+            "routeCounts": list(state),
+            "physicalSocialCost": exact_number(game.social_cost(state)),
+            "averagePhysicalLatency": exact_number(game.social_cost(state) / population),
+            "rosenthalPotential": exact_number(game.rosenthal_potential(state)),
+            "perceivedPotential": exact_number(game.perceived_potential(state)),
+            "exploitability": exact_number(game.exploitability(state)),
+        }
+
     return {
         "countStateCount": analysis.count_states,
-        "pureNashEquilibria": equilibria,
-        "socialOptima": optima,
+        "pureNashEquilibria": [profile(state) for state in analysis.equilibria],
+        "socialOptima": [profile(state) for state in analysis.social_optima],
         "priceOfAnarchy": exact_number(analysis.price_of_anarchy),
         "priceOfStability": exact_number(analysis.price_of_stability),
         "potentialIdentity": {
             "validated": True,
             "feasibleDeviationChecks": analysis.potential_identity_checks,
             "arithmetic": "exact rational",
+            "method": "closed-form identity, exhaustively cross-checked on small populations",
         },
         "tolledPotentialIdentity": {
             "validated": analysis.scenario is Scenario.TOLLED,
@@ -71,16 +68,11 @@ def _exact_analysis_payload(analysis: ExactScenarioAnalysis) -> dict[str, object
     }
 
 
-def _model_payload() -> dict[str, object]:
+def _shared_model_payload() -> dict[str, object]:
     return {
         "identifier": MODEL_IDENTIFIER,
-        "agentCount": 80,
         "nodes": [
-            {
-                "id": node.identifier,
-                "label": node.label,
-                "position": list(node.position),
-            }
+            {"id": node.identifier, "label": node.label, "position": list(node.position)}
             for node in NODES
         ],
         "edges": [
@@ -89,7 +81,7 @@ def _model_payload() -> dict[str, object]:
                 "source": edge.source,
                 "target": edge.target,
                 "physicalLatency": edge.latency_kind,
-                "toll": "(load - 1) / 2" if edge.identifier in {"SU", "VT"} else "0",
+                "toll": "40(load - 1) / N" if edge.identifier in {"SU", "VT"} else "0",
             }
             for edge in EDGES
         ],
@@ -107,12 +99,14 @@ def _model_payload() -> dict[str, object]:
             for code, route in enumerate((Route.UPPER, Route.LOWER, Route.SHORTCUT))
         ],
         "routeCodeMapping": ROUTE_CODES,
+        "latencyRule": "c_N(x) = 40x/N on SU and VT; 45 on UT and SV; 0 on UV",
         "units": "authored latency units per episode",
         "conventions": {
             "cost": "lower is better",
             "reward": "negative perceived route cost, so higher is better",
             "exploitability": "largest available unilateral perceived-cost reduction",
             "socialObjective": "physical travel latency only; toll payments are transfers",
+            "unusedEdgeColor": "green because no traveler experiences its latency",
         },
         "scenarios": [
             {
@@ -137,87 +131,204 @@ def _model_payload() -> dict[str, object]:
     }
 
 
-def build_potential_landscape() -> dict[str, object]:
-    """Build all 3,321 barycentric states and the known 6,400-triangle topology."""
+def _largest_remainder_counts(
+    parts: tuple[int, int, int], resolution: int, population: int
+) -> tuple[int, int, int]:
+    numerators = [part * population for part in parts]
+    floors = [value // resolution for value in numerators]
+    remaining = population - sum(floors)
+    order = sorted(range(3), key=lambda index: (-(numerators[index] % resolution), index))
+    for index in order[:remaining]:
+        floors[index] += 1
+    return floors[0], floors[1], floors[2]
 
-    game = BraessGame(Scenario.OPEN)
-    states = enumerate_count_states(game)
-    equilibrium = (0, 0, 80)
-    optimum = (35, 35, 10)
-    potentials = [game.rosenthal_potential(state) for state in states]
-    social_costs = [game.social_cost(state) for state in states]
-    minimum_potential = min(potentials)
-    minimum_social = min(social_costs)
-    shared_scale = max(
-        max(value - minimum_potential for value in potentials),
-        max(value - minimum_social for value in social_costs),
-    )
-    vertices = []
-    state_index: dict[tuple[int, int, int], int] = {}
+
+def _barycentric_coordinates(counts: tuple[int, int, int], population: int) -> list[float]:
     root_three = 3.0**0.5
     corners = ((-1.0, -root_three / 3), (1.0, -root_three / 3), (0.0, 2 * root_three / 3))
-    for index, state in enumerate(states):
-        upper, lower, shortcut = state
-        state_index[(upper, lower, shortcut)] = index
-        x = (upper * corners[0][0] + lower * corners[1][0] + shortcut * corners[2][0]) / 80
-        y = (upper * corners[0][1] + lower * corners[1][1] + shortcut * corners[2][1]) / 80
-        potential = game.rosenthal_potential(state)
-        social = game.social_cost(state)
+    upper, lower, shortcut = counts
+    return [
+        (upper * corners[0][0] + lower * corners[1][0] + shortcut * corners[2][0]) / population,
+        (upper * corners[0][1] + lower * corners[1][1] + shortcut * corners[2][1]) / population,
+    ]
+
+
+def _downsample_path(path: tuple[tuple[int, ...], ...]) -> tuple[tuple[int, ...], ...]:
+    if len(path) <= MAX_DISPLAY_PATH_POINTS:
+        return path
+    indices = np.linspace(0, len(path) - 1, num=MAX_DISPLAY_PATH_POINTS, dtype=np.int64)
+    unique = tuple(dict.fromkeys(int(index) for index in indices))
+    return tuple(path[index] for index in unique)
+
+
+def build_potential_landscape(
+    population: int = POPULATION,
+    learning: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Build a complete default lattice or fixed-resolution exact-function sample."""
+
+    if population not in SUPPORTED_POPULATIONS:
+        raise ValueError("landscape population is not a public preset")
+    resolution = LANDSCAPE_RESOLUTION[population]
+    game = BraessGame(Scenario.OPEN, population)
+    exact = analyze_scenario(Scenario.OPEN, population)
+    sampled_grid = weak_compositions(resolution, 3)
+    sample_states = [
+        state
+        if resolution == population
+        else _largest_remainder_counts(cast(tuple[int, int, int], state), resolution, population)
+        for state in sampled_grid
+    ]
+    if len(set(sample_states)) != len(sample_states):
+        raise AssertionError("sampled landscape mapping produced duplicate exact states")
+    potentials = [game.rosenthal_potential(state) for state in sample_states]
+    social_costs = [game.social_cost(state) for state in sample_states]
+    original_minimum = min(game.rosenthal_potential(state) for state in exact.equilibria)
+    tolled_minimum = exact.optimum_social_cost
+    shared_scale = max(
+        max(value - original_minimum for value in potentials),
+        max(value - tolled_minimum for value in social_costs),
+    )
+    vertices = []
+    grid_index: dict[tuple[int, int, int], int] = {}
+    for index, (grid_state, exact_state, potential, social) in enumerate(
+        zip(sampled_grid, sample_states, potentials, social_costs, strict=True)
+    ):
+        grid_index[cast(tuple[int, int, int], grid_state)] = index
         vertices.append(
             {
-                "routeCounts": list(state),
-                "displayCoordinates": [x, y],
+                "routeCounts": list(exact_state),
+                "displayCoordinates": _barycentric_coordinates(
+                    cast(tuple[int, int, int], grid_state), resolution
+                ),
                 "originalPotential": float(potential),
                 "physicalSocialCost": float(social),
                 "tolledPotential": float(social),
-                "exploitability": float(game.exploitability(state)),
-                "isUntolledEquilibrium": state == equilibrium,
-                "isPhysicalOptimum": state == optimum,
-                "displayHeightOriginal": float((potential - minimum_potential) / shared_scale),
-                "displayHeightTolled": float((social - minimum_social) / shared_scale),
+                "displayHeightOriginal": float((potential - original_minimum) / shared_scale),
+                "displayHeightTolled": float((social - tolled_minimum) / shared_scale),
             }
         )
     triangles: list[list[int]] = []
-    for upper in range(80):
-        for lower in range(80 - upper):
-            shortcut = 80 - upper - lower
+    for upper in range(resolution):
+        for lower in range(resolution - upper):
+            shortcut = resolution - upper - lower
             triangles.append(
                 [
-                    state_index[(upper, lower, shortcut)],
-                    state_index[(upper + 1, lower, shortcut - 1)],
-                    state_index[(upper, lower + 1, shortcut - 1)],
+                    grid_index[(upper, lower, shortcut)],
+                    grid_index[(upper + 1, lower, shortcut - 1)],
+                    grid_index[(upper, lower + 1, shortcut - 1)],
                 ]
             )
-            if upper + lower <= 78:
+            if upper + lower <= resolution - 2:
                 triangles.append(
                     [
-                        state_index[(upper + 1, lower, shortcut - 1)],
-                        state_index[(upper + 1, lower + 1, shortcut - 2)],
-                        state_index[(upper, lower + 1, shortcut - 1)],
+                        grid_index[(upper + 1, lower, shortcut - 1)],
+                        grid_index[(upper + 1, lower + 1, shortcut - 2)],
+                        grid_index[(upper, lower + 1, shortcut - 1)],
                     ]
                 )
-    if len(vertices) != 3321 or len(triangles) != 6400:
-        raise AssertionError("potential landscape topology has an unexpected size")
+    path, potential_path = strict_best_response_count_path(game, BASE_SEED + population)
+
+    def trajectory_point(state: tuple[int, ...]) -> dict[str, object]:
+        canonical = cast(tuple[int, int, int], state)
+        return {
+            "routeCounts": list(state),
+            "displayCoordinates": _barycentric_coordinates(canonical, population),
+            "displayHeightOriginal": float(
+                (game.rosenthal_potential(state) - original_minimum) / shared_scale
+            ),
+            "displayHeightTolled": float((game.social_cost(state) - tolled_minimum) / shared_scale),
+        }
+
+    learning_trajectories: dict[str, object] = {}
+    if learning is not None:
+        for scenario in (Scenario.OPEN, Scenario.TOLLED):
+            block = cast(dict[str, object], learning[scenario.value])
+            representative = cast(dict[str, object], block["representative"])
+            snapshots = cast(list[dict[str, object]], representative["snapshots"])
+            learning_trajectories[f"{scenario.value}-q-learning"] = [
+                trajectory_point(tuple(cast(list[int], snapshot["routeCounts"])))
+                for snapshot in snapshots
+            ]
     return {
+        "sampling": {
+            "mode": "complete-count-lattice"
+            if population == 100
+            else "deterministic-barycentric-sample",
+            "resolution": resolution,
+            "sampledVertexCount": len(vertices),
+            "fullCountStateCount": exact.count_states,
+            "statement": (
+                "Every count state is displayed."
+                if population == 100
+                else (
+                    "The surface samples the exact potential formula; markers and metrics "
+                    "use exact integer states."
+                )
+            ),
+        },
         "vertices": vertices,
         "triangles": triangles,
-        "equilibriumVertexIndex": state_index[equilibrium],
-        "optimumVertexIndex": state_index[optimum],
+        "markers": {
+            "equilibria": [
+                {
+                    "routeCounts": list(state),
+                    "displayCoordinates": _barycentric_coordinates(
+                        cast(tuple[int, int, int], state), population
+                    ),
+                    "originalPotential": float(game.rosenthal_potential(state)),
+                    "tolledPotential": float(game.social_cost(state)),
+                }
+                for state in exact.equilibria
+            ],
+            "optima": [
+                {
+                    "routeCounts": list(state),
+                    "displayCoordinates": _barycentric_coordinates(
+                        cast(tuple[int, int, int], state), population
+                    ),
+                    "originalPotential": float(game.rosenthal_potential(state)),
+                    "tolledPotential": float(game.social_cost(state)),
+                }
+                for state in exact.social_optima
+            ],
+        },
         "heightTransform": {
-            "formula": "(field - field minimum) / sharedScale",
+            "formula": "(field - exact field minimum) / sharedScale",
             "sharedScale": float(shared_scale),
-            "originalMinimum": float(minimum_potential),
-            "tolledMinimum": float(minimum_social),
-            "meaning": "affine display height; raw values remain attached to every vertex",
+            "originalMinimum": float(original_minimum),
+            "tolledMinimum": float(tolled_minimum),
+            "meaning": "affine display height; raw exact formula values remain attached",
         },
         "cornerLabels": ["all Upper", "all Lower", "all Shortcut"],
+        "trajectories": {
+            **learning_trajectories,
+            "braess-open-best-response": [
+                trajectory_point(state) for state in _downsample_path(path)
+            ],
+        },
+        "bestResponseAudit": {
+            "rawStepCount": len(path),
+            "renderedPointCount": min(len(path), MAX_DISPLAY_PATH_POINTS),
+            "rawPathValidated": True,
+            "everyMoveIsOneAgent": True,
+            "strictlyDecreasingPotential": all(
+                left > right for left, right in pairwise(potential_path)
+            ),
+            "renderedDescription": (
+                "complete strict-improvement sequence"
+                if len(path) <= MAX_DISPLAY_PATH_POINTS
+                else "downsampled strict-improvement sequence"
+            ),
+        },
     }
 
 
 def _configuration_payload(config: ExperimentConfig) -> dict[str, object]:
+    scale = config.population != POPULATION
     return {
-        "profile": "canonical-public",
-        "agents": config.q_learning.agents,
+        "profile": "canonical-64-seed-study" if not scale else "deterministic-scale-study",
+        "agents": config.population,
         "qLearning": {
             "episodes": config.q_learning.episodes,
             "initialQ": config.q_learning.initial_q,
@@ -228,93 +339,168 @@ def _configuration_payload(config: ExperimentConfig) -> dict[str, object]:
             "finalEvaluationEpsilon": 0.0,
             "simultaneousActions": True,
             "separateQTables": True,
-        },
-        "hedge": {
-            "episodes": config.hedge.episodes,
-            "eta": config.hedge.eta,
-            "stableLogWeights": True,
-            "feedback": "full information",
+            "implementation": "vectorized NumPy arrays",
         },
         "seedCount": config.seeds,
-        "bestResponseSeedCount": config.best_response_seeds,
+        "studyScope": (
+            "64 deterministic seeds per scenario"
+            if not scale
+            else (
+                "one deterministic audited run per scenario; uncertainty is not compared "
+                "with the 100-agent study"
+            )
+        ),
+        "snapshotStrategy": "population-aware deterministic adaptive thinning",
         "normalizedCountDistance": "L1 route-count distance divided by 2N",
     }
 
 
-def _load_benchmarks() -> dict[str, object]:
-    path = Path.cwd() / "benchmarks" / "measurements.json"
-    if path.exists():
-        loaded = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(loaded, dict):
-            return cast(dict[str, object], loaded)
+def _presentation_profile(game: BraessGame, state: tuple[int, ...]) -> dict[str, object]:
+    physical = game.route_physical_costs(state)
+    perceived = game.route_perceived_costs(state)
+    social = game.social_cost(state)
     return {
-        "status": "not-recorded",
-        "methodology": "time.perf_counter with warmups; see congestion-marl benchmark",
-    }
-
-
-def _attach_trajectory_indices(
-    landscape: dict[str, object], experiments: dict[str, object]
-) -> None:
-    vertices = cast(list[dict[str, object]], landscape["vertices"])
-    lookup = {
-        tuple(cast(list[int], vertex["routeCounts"])): index
-        for index, vertex in enumerate(vertices)
-    }
-    trajectories: dict[str, list[int]] = {}
-    for scenario_key in (Scenario.OPEN.value, Scenario.TOLLED.value):
-        scenario_block = cast(dict[str, object], experiments[scenario_key])
-        q_block = cast(dict[str, object], scenario_block["qLearning"])
-        representative = cast(dict[str, object], q_block["representative"])
-        snapshots = cast(list[dict[str, object]], representative["snapshots"])
-        trajectories[f"{scenario_key}-q-learning"] = [
-            lookup[tuple(cast(list[int], snapshot["routeCounts"]))] for snapshot in snapshots
-        ]
-    open_block = cast(dict[str, object], experiments[Scenario.OPEN.value])
-    best_block = cast(dict[str, object], open_block["bestResponse"])
-    representative = cast(dict[str, object], best_block["representative"])
-    state = cast(dict[str, object], representative["learnerState"])
-    assignments = cast(list[list[int]], state["acceptedMoveAssignments"])
-    action_arrays = [np.asarray(values, dtype=np.int64) for values in assignments]
-    trajectories["braess-open-best-response"] = [
-        lookup[counts_from_action_indices(values, 3)] for values in action_arrays
-    ]
-    landscape["trajectoryVertexIndices"] = trajectories
-
-
-def build_story(config: ExperimentConfig | None = None) -> dict[str, object]:
-    """Run the deterministic analysis and experiments, then assemble schema 1.0.0."""
-
-    controls = config or ExperimentConfig()
-    configuration = _configuration_payload(controls)
-    config_hash = hashlib.sha256(deterministic_json_bytes(configuration)).hexdigest()[:16]
-    exact = {
-        scenario.value: _exact_analysis_payload(analyze_scenario(scenario)) for scenario in Scenario
-    }
-    experiments = run_experiment_matrix(controls)
-    landscape = build_potential_landscape()
-    _attach_trajectory_indices(landscape, experiments)
-    return {
-        "schemaVersion": SCHEMA_VERSION,
-        "model": _model_payload(),
-        "seedPolicy": seed_policy(),
-        "exactAnalysis": exact,
-        "experiments": {
-            "configuration": configuration,
-            "scenarios": experiments,
+        "routeCounts": list(state),
+        "edgeLoads": game.edge_loads(state),
+        "edgePhysicalLatencies": {
+            edge: float(value) for edge, value in game.edge_physical_latencies(state).items()
         },
-        "potentialLandscape": landscape,
-        "benchmarks": _load_benchmarks(),
+        "routePhysicalCosts": [float(physical[route]) for route in game.routes],
+        "routePerceivedCosts": [float(perceived[route]) for route in game.routes],
+        "physicalSocialCost": float(social),
+        "averagePhysicalLatency": float(social / game.population),
+        "totalTollPayment": float(game.total_toll_payment(state)),
+        "rosenthalPotential": float(game.rosenthal_potential(state)),
+        "perceivedPotential": float(game.perceived_potential(state)),
+        "exploitability": float(game.exploitability(state)),
+    }
+
+
+def _comparison_payload(matrix: dict[str, object]) -> dict[str, object]:
+    scenarios: dict[str, object] = {}
+    for scenario, raw_block in matrix.items():
+        block = cast(dict[str, object], raw_block)
+        learners: dict[str, object] = {}
+        for key in ("qLearning", "bestResponse", "hedge"):
+            learner = cast(dict[str, object], block[key])
+            representative = cast(dict[str, object], learner["representative"])
+            learners[key] = {
+                "learner": learner["learner"],
+                "seedCount": len(cast(list[int], learner["seedList"])),
+                "representativeSelection": learner["representativeSelection"],
+                "representativeSummary": representative["summary"],
+                "aggregate": learner["aggregate"],
+            }
+        scenarios[scenario] = learners
+    return {
+        "population": POPULATION,
+        "scope": (
+            "fully replicated 100-agent study; larger presets are not mixed into this comparison"
+        ),
+        "scenarios": scenarios,
+    }
+
+
+def build_population_bundle(
+    population: int, config: ExperimentConfig | None = None
+) -> dict[str, object]:
+    controls = config or experiment_config_for_population(population)
+    if controls.population != population:
+        raise ValueError("bundle and experiment populations differ")
+    comparison = None
+    if population == POPULATION:
+        matrix = run_experiment_matrix(controls)
+        learning = {
+            scenario.value: cast(dict[str, object], matrix[scenario.value])["qLearning"]
+            for scenario in Scenario
+        }
+        comparison = _comparison_payload(matrix)
+    else:
+        learning = run_q_learning_study(controls)
+    configuration = _configuration_payload(controls)
+    configuration_hash = hashlib.sha256(deterministic_json_bytes(configuration)).hexdigest()[:16]
+    bundle: dict[str, object] = {
+        "schemaVersion": SCHEMA_VERSION,
+        "modelIdentifier": MODEL_IDENTIFIER,
+        "population": population,
+        "waitingState": {
+            "kind": "preExperiment",
+            "waitingCount": population,
+            "edgeLoads": {"SU": 0, "UT": 0, "SV": 0, "VT": 0, "UV": 0},
+            "metricsAvailable": False,
+        },
+        "exactAnalysis": {
+            scenario.value: _exact_analysis_payload(
+                analyze_scenario(scenario, population), population
+            )
+            for scenario in Scenario
+        },
+        "scenarioStates": {
+            scenario.value: {
+                "equilibrium": _presentation_profile(
+                    BraessGame(scenario, population),
+                    analyze_scenario(scenario, population).equilibria[0],
+                ),
+                "optimum": _presentation_profile(
+                    BraessGame(scenario, population),
+                    analyze_scenario(scenario, population).social_optima[0],
+                ),
+            }
+            for scenario in Scenario
+        },
+        "learning": {"configuration": configuration, "scenarios": learning},
+        "potentialLandscape": build_potential_landscape(population, learning),
         "provenance": {
             "packageVersion": __version__,
-            "pythonVersion": platform.python_version(),
-            "numpyVersion": np.__version__,
             "generator": "NumPy Generator with PCG64",
-            "generationCommand": "congestion-marl export --output web/public/data/story-v1.json",
-            "experimentProfile": "canonical-public",
-            "configurationHash": config_hash,
-            "gitCommit": None,
-            "gitCommitPolicy": "excluded from the canonical byte-stable payload",
+            "generationCommand": "congestion-marl export --output web/public/data",
+            "configurationHash": configuration_hash,
             "deterministicGeneration": "same source and configuration produce byte-identical JSON",
+            "wallClockValuesIncluded": False,
         },
     }
+    if comparison is not None:
+        bundle["comparison"] = comparison
+    return bundle
+
+
+def build_manifest() -> dict[str, object]:
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "model": _shared_model_payload(),
+        "defaultPopulation": POPULATION,
+        "comparisonPopulation": POPULATION,
+        "populations": [
+            {
+                "agents": population,
+                "label": f"{population:,}",
+                "bundle": f"population-{population}-v2.json",
+                "visualBeadBudget": 100 if population == 100 else 180,
+                "study": (
+                    "64-seed canonical study"
+                    if population == 100
+                    else "one deterministic audited scale run per scenario"
+                ),
+            }
+            for population in SUPPORTED_POPULATIONS
+        ],
+        "seedPolicy": seed_policy(),
+    }
+
+
+def export_population_data(output_directory: Path) -> dict[int, Path]:
+    """Generate, validate upstream, and write every deterministic public bundle."""
+
+    paths: dict[int, Path] = {}
+    for population in SUPPORTED_POPULATIONS:
+        path = output_directory / f"population-{population}-v2.json"
+        write_deterministic_json(path, build_population_bundle(population))
+        paths[population] = path
+    write_deterministic_json(output_directory / "manifest-v2.json", build_manifest())
+    return paths
+
+
+# Compatibility name for focused tests. The public export is now population-specific.
+def build_story(config: ExperimentConfig | None = None) -> dict[str, object]:
+    controls = config or experiment_config_for_population(POPULATION)
+    return build_population_bundle(controls.population, controls)

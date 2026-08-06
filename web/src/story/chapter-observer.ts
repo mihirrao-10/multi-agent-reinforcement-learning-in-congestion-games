@@ -18,6 +18,10 @@ export class ChapterObserver {
     if (this.frame) cancelAnimationFrame(this.frame);
   }
 
+  refresh(): void {
+    this.requestUpdate();
+  }
+
   private readonly requestUpdate = (): void => {
     if (this.frame) return;
     this.frame = requestAnimationFrame(() => {
@@ -29,9 +33,10 @@ export class ChapterObserver {
   private update(): void {
     const mobile = window.matchMedia("(max-width: 560px)").matches;
     const target = window.innerHeight * (mobile ? 0.45 : 0.52);
-    let nearest = this.chapters[0];
+    const unlocked = this.chapters.filter((chapter) => !chapter.hidden);
+    let nearest = unlocked[0];
     let nearestDistance = Number.POSITIVE_INFINITY;
-    for (const chapter of this.chapters) {
+    for (const chapter of unlocked) {
       const rectangle = chapter.getBoundingClientRect();
       const distance =
         rectangle.top <= target && rectangle.bottom >= target
@@ -48,7 +53,7 @@ export class ChapterObserver {
     const act = Number(nearest?.dataset.storyAct ?? 0);
     if (act !== this.active) {
       this.active = act;
-      this.chapters.forEach((chapter) =>
+      unlocked.forEach((chapter) =>
         chapter.classList.toggle(
           "is-active",
           Number(chapter.dataset.storyAct) === act,

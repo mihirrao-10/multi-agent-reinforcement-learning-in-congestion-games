@@ -1,18 +1,42 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { storySchema, type StoryData } from "../src/data/story-schema";
+import {
+  manifestSchema,
+  populationBundleSchema,
+  type Population,
+  type PopulationBundle,
+  type StoryManifest,
+} from "../src/data/story-schema";
 
-let cached: StoryData | null = null;
+const bundles = new Map<Population, PopulationBundle>();
+let manifest: StoryManifest | undefined;
 
-export function loadFixture(): StoryData {
-  if (cached) return cached;
+export function loadManifestFixture(): StoryManifest {
+  if (manifest) return manifest;
   const raw: unknown = JSON.parse(
     readFileSync(
-      resolve(import.meta.dirname, "../public/data/story-v1.json"),
+      resolve(import.meta.dirname, "../public/data/manifest-v2.json"),
       "utf8",
     ),
   );
-  cached = storySchema.parse(raw);
-  return cached;
+  manifest = manifestSchema.parse(raw);
+  return manifest;
+}
+
+export function loadFixture(population: Population = 100): PopulationBundle {
+  const cached = bundles.get(population);
+  if (cached) return cached;
+  const raw: unknown = JSON.parse(
+    readFileSync(
+      resolve(
+        import.meta.dirname,
+        `../public/data/population-${population}-v2.json`,
+      ),
+      "utf8",
+    ),
+  );
+  const bundle = populationBundleSchema.parse(raw);
+  bundles.set(population, bundle);
+  return bundle;
 }

@@ -5,36 +5,42 @@ import {
   derivePhysicalRouteCosts,
   derivePhysicalSocialCost,
   StoryConsistencyError,
+  validateBundleConsistency,
   validateSnapshot,
-  validateStoryConsistency,
 } from "../src/data/validation";
 import { loadFixture } from "./fixtures";
 
 describe("numerical consistency", () => {
   it("rederives canonical loads, costs, and social cost", () => {
-    expect(deriveEdgeLoads([35, 35, 10], "braess-open")).toEqual({
-      SU: 45,
-      UT: 35,
-      SV: 35,
-      VT: 45,
-      UV: 10,
+    expect(deriveEdgeLoads([44, 44, 12], "braess-open")).toEqual({
+      SU: 56,
+      UT: 44,
+      SV: 44,
+      VT: 56,
+      UV: 12,
     });
-    expect(derivePhysicalRouteCosts([35, 35, 10], "braess-open")).toEqual([
-      67.5, 67.5, 45,
+    expect(derivePhysicalRouteCosts([44, 44, 12], "braess-open")).toEqual([
+      67.4, 67.4, 44.8,
     ]);
-    expect(derivePhysicalSocialCost([35, 35, 10], "braess-open")).toBe(5175);
+    expect(derivePhysicalSocialCost([44, 44, 12], "braess-open")).toBeCloseTo(
+      6468.8,
+    );
   });
 
   it("validates every browser-critical invariant", () => {
-    expect(() => validateStoryConsistency(loadFixture())).not.toThrow();
+    for (const population of [100, 1_000, 10_000] as const) {
+      expect(() =>
+        validateBundleConsistency(loadFixture(population)),
+      ).not.toThrow();
+    }
   });
 
-  it("rejects an assignment and count disagreement", () => {
+  it("rejects a count and load disagreement", () => {
     const snapshot = structuredClone(
-      loadFixture().experiments.scenarios["braess-open"].qLearning
-        .representative.snapshots[0]!,
+      loadFixture().learning.scenarios["braess-open"].representative
+        .snapshots[0]!,
     );
-    snapshot.assignments[0] = (snapshot.assignments[0]! + 1) % 3;
+    snapshot.edgeLoads.SU = (snapshot.edgeLoads.SU ?? 0) + 1;
     expect(() => validateSnapshot(snapshot, "braess-open")).toThrow(
       StoryConsistencyError,
     );

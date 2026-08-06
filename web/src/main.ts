@@ -1,6 +1,6 @@
 import "./style.css";
 
-import { loadStoryData } from "./data/story-data";
+import { loadInitialData } from "./data/story-data";
 import { NetworkFallback } from "./fallback";
 import { renderMath } from "./math";
 import { SceneController } from "./scene/scene-controller";
@@ -13,14 +13,16 @@ async function start(): Promise<void> {
     document.querySelector<HTMLElement>("#projected-labels");
   const fallbackContainer =
     document.querySelector<HTMLElement>("#webgl-fallback");
-  const loading = document.querySelector<HTMLElement>("#loading");
-  if (!canvas || !labelContainer || !fallbackContainer || !loading) {
+  const preparation = document.querySelector<HTMLElement>(
+    "#preparation-status",
+  );
+  if (!canvas || !labelContainer || !fallbackContainer || !preparation) {
     throw new Error("the story shell is incomplete");
   }
   const reducedMotionQuery = window.matchMedia(
     "(prefers-reduced-motion: reduce)",
   );
-  const story = await loadStoryData();
+  const { manifest, bundle } = await loadInitialData();
   await renderMath();
   const forceFallback =
     new URLSearchParams(window.location.search).get("forceFallback") === "1";
@@ -32,7 +34,7 @@ async function start(): Promise<void> {
       scene = new SceneController(
         canvas,
         labelContainer,
-        story,
+        bundle,
         reducedMotionQuery.matches,
         {
           onExploreChange: (exploring) => controller?.syncExplore(exploring),
@@ -55,7 +57,8 @@ async function start(): Promise<void> {
     document.body.dataset.webgl = "fallback";
   }
   controller = new StoryController({
-    story,
+    manifest,
+    bundle,
     scene,
     fallback,
     reducedMotion: reducedMotionQuery.matches,
@@ -63,9 +66,6 @@ async function start(): Promise<void> {
   const handleReducedMotion = (event: MediaQueryListEvent): void =>
     controller?.setReducedMotion(event.matches);
   reducedMotionQuery.addEventListener("change", handleReducedMotion);
-  document.body.dataset.storyReady = "true";
-  loading.classList.add("is-complete");
-  window.setTimeout(() => loading.remove(), 350);
   window.addEventListener(
     "beforeunload",
     () => {
@@ -80,9 +80,12 @@ async function start(): Promise<void> {
 void start().catch((error: unknown) => {
   const message =
     error instanceof Error ? error.message : "unknown validation error";
-  const loading = document.querySelector<HTMLElement>("#loading");
-  if (loading)
-    loading.textContent = `The exact data could not be validated. The mathematical text remains available. ${message}`;
+  const preparation = document.querySelector<HTMLElement>(
+    "#preparation-status",
+  );
+  if (preparation) {
+    preparation.textContent = `The exact data could not be validated. ${message}`;
+  }
   const canvas =
     document.querySelector<HTMLCanvasElement>("#congestion-canvas");
   if (canvas) canvas.hidden = true;

@@ -1,12 +1,3 @@
-import type {
-  FinalSummary,
-  LearnerBlock,
-  StoryData,
-  StorySnapshot,
-} from "../data/story-schema";
-import { exactSnapshotAtIndex } from "../data/validation";
-import type { NetworkFallback } from "../fallback";
-import type { SceneController } from "../scene/scene-controller";
 import { createLearnerChart } from "../charts/learner-chart";
 import {
   createLearningChart,
@@ -14,7 +5,28 @@ import {
 } from "../charts/learning-chart";
 import { createRouteShareChart } from "../charts/route-share-chart";
 import { createScenarioChart } from "../charts/scenario-chart";
+import { loadPopulationBundle } from "../data/story-data";
+import type {
+  FinalSummary,
+  NetworkPresentation,
+  Population,
+  PopulationBundle,
+  ScenarioId,
+  StoryManifest,
+  StorySnapshot,
+} from "../data/story-schema";
+import { exactSnapshotAtIndex } from "../data/validation";
+import type { NetworkFallback } from "../fallback";
+import type { SceneController } from "../scene/scene-controller";
+import { cohortLegend, visibleBeadBudget } from "../scene/cohorts";
 import { ChapterObserver } from "./chapter-observer";
+import {
+  conceptVisibility,
+  initialJourneyState,
+  reduceJourneyState,
+  type JourneyEvent,
+  type JourneyState,
+} from "./journey-state";
 import {
   initialStoryState,
   reduceStoryState,
@@ -24,7 +36,8 @@ import {
 } from "./state-machine";
 
 interface StoryControllerOptions {
-  readonly story: StoryData;
+  readonly manifest: StoryManifest;
+  readonly bundle: PopulationBundle;
   readonly scene: SceneController | null;
   readonly fallback: NetworkFallback | null;
   readonly reducedMotion: boolean;
@@ -46,24 +59,45 @@ function profileText(counts: readonly number[]): string {
   return `(${counts.join(", ")})`;
 }
 
+function scenarioForAct(act: number): ScenarioId {
+  if (act === 6) return "braess-closed";
+  if (act >= 7) return "braess-tolled";
+  return "braess-open";
+}
+
 export class StoryController {
-  private readonly story: StoryData;
+  private readonly manifest: StoryManifest;
+  private bundle: PopulationBundle;
+  private readonly comparisonBundle: PopulationBundle;
   private readonly scene: SceneController | null;
   private readonly fallback: NetworkFallback | null;
   private readonly observer: ChapterObserver;
-  private readonly learningChart: LearningChartHandle;
-  private state: StoryState;
+  private journey: JourneyState = initialJourneyState();
+  private visual: StoryState;
+  private learningChart: LearningChartHandle | null = null;
   private animationFrame = 0;
   private previousPlaybackTime = 0;
+  private populationRequest = 0;
   private lastAnnouncementKey = "";
 
+  private readonly opening = requireElement<HTMLElement>("#opening-screen");
+  private readonly main = requireElement<HTMLElement>("#story");
+  private readonly startButton =
+    requireElement<HTMLButtonElement>("#start-journey");
+  private readonly preparation = requireElement<HTMLElement>(
+    "#preparation-status",
+  );
+  private readonly stage = requireElement<HTMLElement>("#stage");
   private readonly canvas =
     requireElement<HTMLCanvasElement>("#congestion-canvas");
-  private readonly stage = requireElement<HTMLElement>("#stage");
   private readonly caption = requireElement<HTMLElement>("#scene-caption");
   private readonly description =
     requireElement<HTMLElement>("#scene-description");
-  private readonly status = requireElement<HTMLElement>("#playback-status");
+  private readonly playbackStatus =
+    requireElement<HTMLElement>("#playback-status");
+  private readonly chapterStatus =
+    requireElement<HTMLElement>("#chapter-status");
+  private readonly stageMetrics = requireElement<HTMLElement>("#stage-metrics");
   private readonly episodeMetric =
     requireElement<HTMLElement>("#metric-episode");
   private readonly routeMetric = requireElement<HTMLElement>("#metric-routes");
@@ -73,302 +107,464 @@ export class StoryController {
     "#metric-exploitability",
   );
   private readonly playPause = requireElement<HTMLButtonElement>("#play-pause");
-  private readonly replay = requireElement<HTMLButtonElement>("#replay");
+  private readonly contextualPlayback = requireElement<HTMLElement>(
+    "#contextual-playback",
+  );
   private readonly explore = requireElement<HTMLButtonElement>("#explore-view");
   private readonly reset = requireElement<HTMLButtonElement>("#reset-view");
   private readonly focusPrimary =
     requireElement<HTMLButtonElement>("#focus-primary");
   private readonly focusSecondary =
     requireElement<HTMLButtonElement>("#focus-secondary");
-  private readonly legend = requireElement<HTMLElement>(".network-legend");
+  private readonly legend = requireElement<HTMLElement>("#network-legend");
+  private readonly directionalPathLegend = requireElement<HTMLElement>(
+    "#directional-path-legend",
+  );
+  private readonly cohortItem = requireElement<HTMLElement>(
+    "#cohort-legend-item",
+  );
+  private readonly cohortText = requireElement<HTMLElement>(
+    "#cohort-legend-text",
+  );
+  private readonly populationLoading = requireElement<HTMLElement>(
+    "#population-loading",
+  );
+  private readonly runLearning =
+    requireElement<HTMLButtonElement>("#run-learning");
+  private readonly runAgain = requireElement<HTMLButtonElement>("#run-again");
+  private readonly learningResults =
+    requireElement<HTMLElement>("#learning-results");
+  private readonly learningSummary = requireElement<HTMLElement>(
+    "#learning-complete-summary",
+  );
 
   constructor(options: StoryControllerOptions) {
-    this.story = options.story;
+    this.manifest = options.manifest;
+    this.bundle = options.bundle;
+    this.comparisonBundle = options.bundle;
     this.scene = options.scene;
     this.fallback = options.fallback;
-    this.state = initialStoryState(options.reducedMotion);
-    this.populateExactText();
-    this.populateMethodology();
-    this.populateLearnerTable();
-    const openSnapshots =
-      this.story.experiments.scenarios["braess-open"].qLearning.representative
-        .snapshots;
-    const openExact = this.story.exactAnalysis["braess-open"];
-    this.learningChart = createLearningChart(
-      requireElement("#learning-chart"),
-      openSnapshots,
-      openExact.pureNashEquilibria[0]!.averagePhysicalLatency.decimal,
-      openExact.socialOptima[0]!.averagePhysicalLatency.decimal,
+    this.visual = initialStoryState(
+      options.reducedMotion,
+      options.bundle.population,
     );
-    createRouteShareChart(requireElement("#route-share-chart"), openSnapshots);
-    createScenarioChart(requireElement("#scenario-chart"), this.story);
-    createLearnerChart(requireElement("#learner-chart"), this.story);
     this.bindControls();
     const chapters = [
       ...document.querySelectorAll<HTMLElement>(".chapter[data-story-act]"),
     ];
-    this.observer = new ChapterObserver(chapters, (chapter) =>
-      this.setChapter(chapter),
+    this.observer = new ChapterObserver(chapters, (act) =>
+      this.activateAct(act),
     );
-    this.render(true);
+    this.populateBundleContent();
+    this.populateComparison();
+    document.body.dataset.bundlePopulation = String(this.bundle.population);
+    this.render();
+    this.startButton.disabled = false;
+    this.preparation.remove();
+    document.body.dataset.storyReady = "true";
     this.animationFrame = requestAnimationFrame(this.tick);
   }
 
   dispose(): void {
     cancelAnimationFrame(this.animationFrame);
     this.observer.destroy();
+    window.removeEventListener("keydown", this.guardLockedNavigation);
+    window.removeEventListener("hashchange", this.guardHashNavigation);
   }
 
   syncExplore(exploring: boolean): void {
-    if (this.state.userExploring !== exploring)
-      this.dispatch({ type: "TOGGLE_EXPLORE" });
+    if (this.visual.userExploring !== exploring) {
+      this.dispatchVisual({ type: "TOGGLE_EXPLORE" });
+    }
   }
 
   markManualInteraction(): void {
-    this.dispatch({ type: "FOCUS", target: "manual" });
+    this.dispatchVisual({ type: "FOCUS", target: "manual" });
   }
 
   exitExplore(): void {
-    this.dispatch({ type: "EXIT_EXPLORE" });
+    this.dispatchVisual({ type: "EXIT_EXPLORE" });
   }
 
   setReducedMotion(reducedMotion: boolean): void {
-    this.dispatch({ type: "SET_REDUCED_MOTION", reduced: reducedMotion });
+    this.dispatchVisual({ type: "SET_REDUCED_MOTION", reduced: reducedMotion });
   }
 
-  private dispatch(event: StoryEvent, announce = false): void {
-    this.state = reduceStoryState(this.state, event);
+  private dispatchJourney(event: JourneyEvent): void {
+    this.journey = reduceJourneyState(this.journey, event);
+  }
+
+  private dispatchVisual(event: StoryEvent, announce = false): void {
+    this.visual = reduceStoryState(this.visual, event);
     this.render(announce);
   }
 
-  private setChapter(chapter: number): void {
-    this.dispatch({ type: "SET_CHAPTER", chapter }, true);
-    const snapshots = this.activeSnapshots();
-    let index = this.state.snapshotIndex;
-    if (chapter === 0 || chapter === 1) index = 0;
-    else if (chapter === 2) index = Math.round(snapshots.length * 0.34);
-    else if (chapter === 4 || chapter === 5 || chapter === 6 || chapter >= 8) {
-      index = snapshots.length - 1;
-    } else if (chapter === 7) index = 0;
-    this.dispatch({ type: "SET_SNAPSHOT", index });
-    if (chapter === 7 && !this.state.reducedMotion)
-      this.dispatch({ type: "PLAY" }, true);
+  private startJourney(): void {
+    if (this.journey.started) return;
+    this.clearHash();
+    this.dispatchJourney({ type: "START" });
+    this.opening.hidden = true;
+    this.main.hidden = false;
+    document.body.classList.remove("journey-locked");
+    document.body.dataset.journeyStarted = "true";
+    window.scrollTo({ top: 0, behavior: "auto" });
+    this.observer.refresh();
+    this.render(true);
   }
 
-  private activeSnapshots(): readonly StorySnapshot[] {
-    return this.story.experiments.scenarios[this.state.scenario].qLearning
-      .representative.snapshots;
+  private activateAct(act: number): void {
+    if (!this.journey.started || act > this.journey.maxUnlockedAct) return;
+    this.dispatchJourney({ type: "SET_ACTIVE_ACT", act });
+    this.visual = reduceStoryState(this.visual, {
+      type: "SET_CHAPTER",
+      chapter: act,
+    });
+    if (act >= 4 && this.journey.learningCompleted) {
+      const snapshots = this.learningSnapshots("braess-open");
+      this.visual = reduceStoryState(this.visual, {
+        type: "SET_SNAPSHOT",
+        index: snapshots.length - 1,
+      });
+    }
+    this.render(true);
   }
 
-  private activeSnapshot(): StorySnapshot {
+  private proceed(fromAct: number): void {
+    if (
+      fromAct !== this.journey.activeAct ||
+      fromAct > this.journey.maxUnlockedAct
+    )
+      return;
+    const before = this.journey.maxUnlockedAct;
+    this.dispatchJourney({ type: "PROCEED" });
+    if (this.journey.maxUnlockedAct === before) return;
+    const next = this.journey.maxUnlockedAct;
+    const chapter = requireElement<HTMLElement>(`[data-story-act="${next}"]`);
+    chapter.hidden = false;
+    this.activateAct(next);
+    const title =
+      chapter.querySelector<HTMLElement>("h2, h1")?.textContent?.trim() ??
+      "Next chapter";
+    this.chapterStatus.textContent = `${title} unlocked.`;
+    this.observer.refresh();
+    chapter.scrollIntoView({
+      behavior: this.visual.reducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  }
+
+  private startLearning(replay = false): void {
+    if (this.journey.activeAct !== 3) return;
+    this.dispatchJourney({ type: "START_LEARNING" });
+    this.visual = reduceStoryState(this.visual, {
+      type: replay ? "REPLAY" : "PLAY",
+    });
+    this.visual = reduceStoryState(this.visual, {
+      type: "SET_SNAPSHOT",
+      index: 0,
+    });
+    this.learningSummary.textContent = "";
+    this.render(true);
+  }
+
+  private completeLearning(): void {
+    this.dispatchJourney({ type: "COMPLETE_LEARNING" });
+    this.visual = reduceStoryState(this.visual, { type: "COMPLETE" });
+    const snapshot = this.activeLearningSnapshot();
+    this.learningSummary.textContent = `The exported run finishes at ${profileText(snapshot.routeCounts)}, with average latency ${formatNumber(snapshot.averagePhysicalLatency)}.`;
+    this.playbackStatus.textContent = this.learningSummary.textContent;
+    this.render();
+  }
+
+  private async selectPopulation(population: Population): Promise<void> {
+    if (
+      population === this.bundle.population &&
+      !this.populationLoading.textContent
+    )
+      return;
+    const request = ++this.populationRequest;
+    this.populationLoading.textContent = `Loading ${population.toLocaleString()}-agent data…`;
+    this.setPopulationButtonsDisabled(true);
+    try {
+      const bundle = await loadPopulationBundle(population);
+      if (request !== this.populationRequest) return;
+      this.bundle = bundle;
+      this.scene?.setBundle(bundle);
+      this.dispatchJourney({ type: "SELECT_POPULATION", population });
+      this.visual = reduceStoryState(this.visual, {
+        type: "SET_POPULATION",
+        population,
+      });
+      const targetAct =
+        this.journey.maxUnlockedAct >= 3 ? 3 : this.journey.activeAct;
+      this.dispatchJourney({ type: "SET_ACTIVE_ACT", act: targetAct });
+      this.visual = reduceStoryState(this.visual, {
+        type: "SET_CHAPTER",
+        chapter: targetAct,
+      });
+      this.clearRouteHighlight();
+      this.populateBundleContent();
+      document.body.dataset.bundlePopulation = String(population);
+      this.populationLoading.textContent = "";
+      this.playbackStatus.textContent = `${population.toLocaleString()} agents selected. Learning reset to the waiting state.`;
+      this.render();
+      if (targetAct === 3) {
+        requireElement<HTMLElement>("#q-learning").scrollIntoView({
+          behavior: this.visual.reducedMotion ? "auto" : "smooth",
+          block: "center",
+        });
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "unknown data error";
+      this.populationLoading.textContent = `Could not load: ${message}`;
+    } finally {
+      if (request === this.populationRequest)
+        this.setPopulationButtonsDisabled(false);
+    }
+  }
+
+  private learningSnapshots(scenario: ScenarioId): readonly StorySnapshot[] {
+    return this.bundle.learning.scenarios[scenario].representative.snapshots;
+  }
+
+  private activeLearningSnapshot(): StorySnapshot {
     return exactSnapshotAtIndex(
-      this.activeSnapshots(),
-      this.state.snapshotIndex,
+      this.learningSnapshots(this.visual.scenario),
+      this.visual.snapshotIndex,
     );
+  }
+
+  private activePresentation(): NetworkPresentation | null {
+    if (this.journey.activeAct <= 3) {
+      if (!this.journey.learningStarted || this.visual.waiting) return null;
+      return this.activeLearningSnapshot();
+    }
+    if (this.journey.activeAct === 4) {
+      return this.activeLearningSnapshot();
+    }
+    if (this.journey.activeAct === 5) {
+      return this.bundle.scenarioStates["braess-open"].equilibrium;
+    }
+    const scenario = scenarioForAct(this.journey.activeAct);
+    return this.bundle.scenarioStates[scenario].equilibrium;
   }
 
   private render(announce = false): void {
-    const snapshots = this.activeSnapshots();
-    const snapshot = this.activeSnapshot();
-    this.scene?.setState(this.state, snapshot, snapshots.length);
-    this.fallback?.update(snapshot, this.state.shortcutOpen);
-    this.stage.dataset.storyAct = String(this.state.activeChapter);
-    this.stage.dataset.sceneMode = this.state.sceneMode;
-    this.stage.dataset.scenario = this.state.scenario;
-    this.stage.dataset.learningState = this.state.playback;
-    this.stage.dataset.shortcut = this.state.shortcutOpen ? "open" : "closed";
-    this.stage.dataset.tolls = this.state.tollsActive ? "active" : "inactive";
-    this.stage.dataset.episode = String(snapshot.episode);
-    this.stage.dataset.routeCounts = snapshot.routeCounts.join(",");
-    this.stage.dataset.focusTarget = this.state.focusTarget;
-    this.stage.dataset.userExploring = String(this.state.userExploring);
-    this.stage.dataset.reducedMotion = String(this.state.reducedMotion);
-    this.stage.dataset.trajectory = this.state.trajectory;
-    this.stage.dataset.surface = this.state.tollsActive
+    const presentation = this.activePresentation();
+    const sceneState: StoryState = {
+      ...this.visual,
+      activeChapter: this.journey.activeAct,
+      population: this.bundle.population,
+      waiting: presentation === null,
+    };
+    const snapshots = this.learningSnapshots(sceneState.scenario);
+    this.scene?.setState(sceneState, presentation, snapshots.length);
+    this.fallback?.update(
+      presentation,
+      sceneState.shortcutOpen,
+      this.bundle.population,
+      presentation === null,
+    );
+    this.renderDataAttributes(sceneState, presentation);
+    this.renderControls(sceneState);
+    this.renderMetrics(presentation);
+    this.renderCaption(presentation);
+    if (
+      presentation &&
+      "episode" in presentation &&
+      sceneState.scenario === "braess-open"
+    ) {
+      this.learningChart?.updateCursor(presentation.episode);
+    }
+    if (announce) this.announceState(presentation);
+  }
+
+  private renderDataAttributes(
+    state: StoryState,
+    presentation: NetworkPresentation | null,
+  ): void {
+    this.stage.dataset.storyAct = String(this.journey.activeAct);
+    this.stage.dataset.maxUnlockedAct = String(this.journey.maxUnlockedAct);
+    this.stage.dataset.sceneMode = state.sceneMode;
+    this.stage.dataset.scenario = state.scenario;
+    this.stage.dataset.learningState = this.journey.learningStarted
+      ? state.playback
+      : "not-started";
+    this.stage.dataset.shortcut = state.shortcutOpen ? "open" : "closed";
+    this.stage.dataset.tolls = state.tollsActive ? "active" : "inactive";
+    this.stage.dataset.episode =
+      presentation && "episode" in presentation
+        ? String(presentation.episode)
+        : "";
+    this.stage.dataset.routeCounts = presentation
+      ? presentation.routeCounts.join(",")
+      : "waiting";
+    this.stage.dataset.population = String(this.bundle.population);
+    this.stage.dataset.presentationState = presentation
+      ? "snapshot"
+      : "waiting";
+    this.stage.dataset.focusTarget = state.focusTarget;
+    this.stage.dataset.userExploring = String(state.userExploring);
+    this.stage.dataset.reducedMotion = String(state.reducedMotion);
+    this.stage.dataset.trajectory = state.trajectory;
+    this.stage.dataset.surface = state.tollsActive
       ? "physical-social-cost"
       : "rosenthal-potential";
-    this.episodeMetric.textContent = snapshot.episode.toLocaleString();
-    const paddedCounts =
-      this.state.scenario === "braess-closed"
-        ? [...snapshot.routeCounts, 0]
-        : snapshot.routeCounts;
-    this.routeMetric.textContent = paddedCounts.join(" / ");
-    this.latencyMetric.textContent = formatNumber(
-      snapshot.averagePhysicalLatency,
+    this.stage.dataset.visibleBeads = String(
+      visibleBeadBudget(this.bundle.population),
     );
-    this.exploitabilityMetric.textContent = formatNumber(
-      snapshot.exploitability,
-    );
-    this.playPause.textContent =
-      this.state.playback === "playing" ? "Pause learning" : "Play learning";
-    this.playPause.setAttribute(
-      "aria-pressed",
-      String(this.state.playback === "playing"),
-    );
-    this.explore.textContent = this.state.userExploring
+  }
+
+  private renderControls(state: StoryState): void {
+    const concepts = conceptVisibility(this.journey);
+    this.explore.textContent = state.userExploring
       ? "Exit Explore view"
       : "Explore view";
-    this.explore.setAttribute("aria-pressed", String(this.state.userExploring));
-    const landscape = this.state.sceneMode === "landscape";
-    this.legend.setAttribute(
-      "aria-label",
-      landscape
-        ? "Potential landscape visual encoding"
-        : "Network visual encoding",
-    );
+    this.explore.setAttribute("aria-pressed", String(state.userExploring));
+    const landscape = state.sceneMode === "landscape";
+    this.focusPrimary.hidden = this.journey.activeAct < 1;
+    this.focusSecondary.hidden = this.journey.activeAct < 2;
     this.focusPrimary.textContent = landscape
       ? "Focus equilibrium"
       : "Focus shortcut";
     this.focusSecondary.textContent = landscape
       ? "Focus optimum"
       : "Focus bottleneck";
-    this.caption.textContent = this.captionText(snapshot);
-    this.description.textContent = this.descriptionText(snapshot);
+    this.legend.hidden = !(
+      concepts.networkEncoding || concepts.landscapeLegend
+    );
+    this.legend.setAttribute(
+      "aria-label",
+      landscape
+        ? "Potential landscape visual encoding"
+        : "Network visual encoding",
+    );
+    this.directionalPathLegend.hidden = !(
+      landscape && state.trajectory === "best-response"
+    );
+    const cohortActive = this.bundle.population > 100 && !landscape;
+    this.cohortItem.hidden = !cohortActive;
+    this.cohortText.textContent = cohortLegend(
+      this.bundle.population,
+      visibleBeadBudget(this.bundle.population),
+    );
+    const learningInProgress =
+      this.journey.learningStarted && !this.journey.learningCompleted;
+    this.contextualPlayback.hidden = !learningInProgress;
+    this.playPause.textContent =
+      state.playback === "playing" ? "Pause learning" : "Resume learning";
+    this.playPause.setAttribute(
+      "aria-pressed",
+      String(state.playback === "playing"),
+    );
+    this.runLearning.hidden = this.journey.learningStarted;
+    this.runAgain.hidden = !this.journey.learningCompleted;
+    this.learningResults.hidden = !this.journey.learningStarted;
+    const learningProceed = requireElement<HTMLButtonElement>(
+      '[data-proceed-act="3"]',
+    );
+    learningProceed.hidden = !this.journey.learningCompleted;
+    this.runLearning.textContent = `Run learning with ${this.bundle.population.toLocaleString()} agents`;
+    document
+      .querySelectorAll<HTMLButtonElement>("button[data-population]")
+      .forEach((button) =>
+        button.setAttribute(
+          "aria-pressed",
+          String(Number(button.dataset.population) === this.bundle.population),
+        ),
+      );
+  }
+
+  private renderMetrics(presentation: NetworkPresentation | null): void {
+    const concepts = conceptVisibility(this.journey);
+    const hasPresentation = presentation !== null;
+    const episodeVisible =
+      hasPresentation && "episode" in presentation && concepts.learningMetrics;
+    const routesVisible =
+      hasPresentation &&
+      (concepts.learningMetrics || this.journey.activeAct >= 5);
+    const latencyVisible =
+      hasPresentation &&
+      (concepts.learningMetrics || this.journey.activeAct >= 5);
+    const exploitabilityVisible = hasPresentation && concepts.exploitability;
+    const visibility: Record<string, boolean> = {
+      episode: episodeVisible,
+      routes: routesVisible,
+      latency: latencyVisible,
+      exploitability: exploitabilityVisible,
+    };
+    Object.entries(visibility).forEach(([metric, visible]) => {
+      const row = requireElement<HTMLElement>(`[data-metric="${metric}"]`);
+      row.hidden = !visible;
+    });
+    this.stageMetrics.hidden = !Object.values(visibility).some(Boolean);
+    if (!presentation) return;
+    this.episodeMetric.textContent =
+      "episode" in presentation ? presentation.episode.toLocaleString() : "";
+    const padded =
+      presentation.routeCounts.length === 2
+        ? [...presentation.routeCounts, 0]
+        : presentation.routeCounts;
+    this.routeMetric.textContent = padded
+      .map((count) => count.toLocaleString())
+      .join(" / ");
+    this.latencyMetric.textContent = formatNumber(
+      presentation.averagePhysicalLatency,
+    );
+    this.exploitabilityMetric.textContent = formatNumber(
+      presentation.exploitability,
+    );
+  }
+
+  private renderCaption(presentation: NetworkPresentation | null): void {
+    if (!presentation) {
+      this.caption.textContent = `All ${this.bundle.population.toLocaleString()} agents are waiting at S. No one has chosen a route yet.`;
+      this.description.textContent = `${this.bundle.population.toLocaleString()} agents wait at source S. All five unused edges are thin and green. No episode or route metric exists yet.`;
+    } else if (this.visual.sceneMode === "landscape") {
+      const sampled =
+        this.bundle.potentialLandscape.sampling.mode !==
+        "complete-count-lattice";
+      this.caption.textContent = this.visual.tollsActive
+        ? `Tolled potential equals physical social cost. The marker uses exact profile ${profileText(presentation.routeCounts)}.`
+        : this.visual.trajectory === "best-response"
+          ? `${sampled ? "A sampled view of" : ""} Rosenthal potential. The arrows point toward decreasing potential.`
+          : `${sampled ? "A sampled view of" : ""} Rosenthal potential. The pale Q-learning trace is not monotone.`;
+      this.description.textContent = `Potential landscape for ${this.bundle.population.toLocaleString()} agents. Active exact profile ${profileText(presentation.routeCounts)}. ${this.bundle.potentialLandscape.sampling.statement}`;
+    } else if (!this.visual.shortcutOpen) {
+      this.caption.textContent = `The shortcut is unavailable. Upper and Lower split all ${this.bundle.population.toLocaleString()} agents at equilibrium.`;
+      this.description.textContent = `Shortcut removed. Exact equilibrium route counts ${presentation.routeCounts.join(", ")}, average latency ${formatNumber(presentation.averagePhysicalLatency)}.`;
+    } else if (this.visual.tollsActive) {
+      this.caption.textContent = `The shortcut is restored. Toll rings change perceived cost, while edge color still shows travel time.`;
+      this.description.textContent = `Marginal-cost tolls active. Exact equilibrium ${profileText(presentation.routeCounts)}, physical average latency ${formatNumber(presentation.averagePhysicalLatency)}.`;
+    } else {
+      const episode =
+        "episode" in presentation
+          ? ` Episode ${presentation.episode.toLocaleString()}.`
+          : "";
+      this.caption.textContent = `Learning uses an exported ${this.bundle.population.toLocaleString()}-agent trajectory.${episode}`;
+      this.description.textContent = `Shortcut open. Route counts ${presentation.routeCounts.join(", ")}; average physical latency ${formatNumber(presentation.averagePhysicalLatency)}.${episode}`;
+    }
     this.canvas.setAttribute("aria-label", this.description.textContent);
-    if (this.state.scenario === "braess-open")
-      this.learningChart.updateCursor(snapshot.episode);
-    if (announce) this.announceState(snapshot);
   }
 
-  private captionText(snapshot: StorySnapshot): string {
-    if (this.state.sceneMode === "landscape") {
-      return this.state.tollsActive
-        ? `Tolled potential equals physical social cost. Exact state ${profileText(snapshot.routeCounts)}.`
-        : `Rosenthal potential over all 3,321 count states. Active state ${profileText(snapshot.routeCounts)}.`;
-    }
-    if (!this.state.shortcutOpen) {
-      return `Shortcut removed. Exact episode ${snapshot.episode.toLocaleString()}, route split ${profileText(snapshot.routeCounts)}.`;
-    }
-    if (this.state.tollsActive) {
-      return `Marginal-cost tolls active. Exact episode ${snapshot.episode.toLocaleString()}, physical average ${formatNumber(snapshot.averagePhysicalLatency)}.`;
-    }
-    return `Shortcut open. Exact episode ${snapshot.episode.toLocaleString()}, physical average ${formatNumber(snapshot.averagePhysicalLatency)}.`;
-  }
-
-  private descriptionText(snapshot: StorySnapshot): string {
-    const mode =
-      this.state.sceneMode === "network"
-        ? "three-dimensional braided network"
-        : "triangular three-dimensional potential landscape";
-    const shortcut = this.state.shortcutOpen ? "open" : "removed";
-    const tolls = this.state.tollsActive
-      ? "marginal-cost tolls active"
-      : "no tolls";
-    const focus =
-      this.state.focusTarget === "equilibrium"
-        ? " Focus is on the exact equilibrium."
-        : this.state.focusTarget === "optimum"
-          ? " Focus is on the exact physical optimum."
-          : this.state.focusTarget === "shortcut"
-            ? " Focus is on the zero-cost shortcut."
-            : this.state.focusTarget === "bottleneck"
-              ? " Focus is on the variable-latency bottlenecks."
-              : "";
-    return `${mode}; shortcut ${shortcut}; ${tolls}; exact route counts ${snapshot.routeCounts.join(", ")}; average physical latency ${formatNumber(snapshot.averagePhysicalLatency)}.${focus}`;
-  }
-
-  private announceState(snapshot: StorySnapshot): void {
-    const key = `${this.state.activeChapter}:${this.state.sceneMode}:${this.state.scenario}:${Math.floor(this.state.snapshotIndex / Math.max(1, this.activeSnapshots().length / 4))}`;
+  private announceState(presentation: NetworkPresentation | null): void {
+    const key = `${this.journey.activeAct}:${this.bundle.population}:${this.visual.sceneMode}:${presentation ? presentation.routeCounts.join(",") : "waiting"}`;
     if (key === this.lastAnnouncementKey) return;
     this.lastAnnouncementKey = key;
-    this.status.textContent = this.descriptionText(snapshot);
+    this.playbackStatus.textContent = this.description.textContent;
   }
 
-  private bindControls(): void {
-    this.playPause.addEventListener("click", () => {
-      this.dispatch(
-        { type: this.state.playback === "playing" ? "PAUSE" : "PLAY" },
-        true,
-      );
-    });
-    this.replay.addEventListener("click", () =>
-      this.dispatch({ type: "REPLAY" }, true),
-    );
-    this.explore.addEventListener("click", () => this.scene?.toggleExplore());
-    this.reset.addEventListener("click", () => {
-      this.scene?.resetView();
-      this.dispatch({ type: "RESET_VIEW" });
-    });
-    this.focusPrimary.addEventListener("click", () => {
-      const target: FocusTarget =
-        this.state.sceneMode === "landscape" ? "equilibrium" : "shortcut";
-      this.dispatch({ type: "FOCUS", target }, true);
-      this.scene?.focus(target);
-    });
-    this.focusSecondary.addEventListener("click", () => {
-      const target: FocusTarget =
-        this.state.sceneMode === "landscape" ? "optimum" : "bottleneck";
-      this.dispatch({ type: "FOCUS", target }, true);
-      this.scene?.focus(target);
-    });
-    requireElement<HTMLButtonElement>("#begin-learning").addEventListener(
-      "click",
-      () => {
-        this.dispatch({ type: "REPLAY" }, true);
-        document.querySelector("#q-learning")?.scrollIntoView({
-          behavior: this.state.reducedMotion ? "auto" : "smooth",
-          block: "center",
-        });
-      },
-    );
-    requireElement<HTMLButtonElement>("#replay-experiment").addEventListener(
-      "click",
-      () => {
-        this.dispatch({ type: "SET_CHAPTER", chapter: 0 }, true);
-        this.dispatch({ type: "REPLAY" });
-        document.querySelector("#arrival")?.scrollIntoView({
-          behavior: this.state.reducedMotion ? "auto" : "smooth",
-          block: "start",
-        });
-      },
-    );
+  private populateBundleContent(): void {
+    const population = this.bundle.population;
     document
-      .querySelectorAll<HTMLButtonElement>("[data-route-focus]")
-      .forEach((button) => {
-        button.addEventListener("click", () => {
-          const route = button.dataset.routeFocus;
-          if (route === "U" || route === "L" || route === "Z") {
-            this.scene?.highlightRoute(route);
-            this.fallback?.highlightRoute(route);
-            this.stage.dataset.routeHighlight = route;
-            this.caption.textContent = `${button.textContent?.trim() ?? route} highlighted as one complete route action.`;
-          }
-        });
-      });
-  }
-
-  private readonly tick = (timestamp: number): void => {
-    this.animationFrame = requestAnimationFrame(this.tick);
-    if (this.state.playback !== "playing") {
-      this.previousPlaybackTime = timestamp;
-      return;
-    }
-    const interval = this.state.reducedMotion ? 700 : 78;
-    if (timestamp - this.previousPlaybackTime < interval) return;
-    this.previousPlaybackTime = timestamp;
-    const snapshots = this.activeSnapshots();
-    const step = this.state.reducedMotion
-      ? Math.max(1, Math.floor(snapshots.length / 7))
-      : 1;
-    const next = this.state.snapshotIndex + step;
-    if (next >= snapshots.length - 1) {
-      this.dispatch({ type: "SET_SNAPSHOT", index: snapshots.length - 1 });
-      this.dispatch({ type: "COMPLETE" }, true);
-      return;
-    }
-    this.dispatch({ type: "SET_SNAPSHOT", index: next });
-    const quarter = Math.floor(next / Math.max(1, snapshots.length / 4));
-    if (
-      quarter > Math.floor((next - step) / Math.max(1, snapshots.length / 4))
-    ) {
-      this.announceState(this.activeSnapshot());
-    }
-  };
-
-  private populateExactText(): void {
-    const open = this.story.exactAnalysis["braess-open"];
-    const closed = this.story.exactAnalysis["braess-closed"];
-    const tolled = this.story.exactAnalysis["braess-tolled"];
+      .querySelectorAll<HTMLElement>("[data-population-text]")
+      .forEach(
+        (element) => (element.textContent = population.toLocaleString()),
+      );
+    const open = this.bundle.exactAnalysis["braess-open"];
+    const closed = this.bundle.exactAnalysis["braess-closed"];
+    const tolled = this.bundle.exactAnalysis["braess-tolled"];
     const values: Record<string, string> = {
       "open-equilibrium-counts": profileText(
         open.pureNashEquilibria[0]!.routeCounts,
@@ -378,9 +574,6 @@ export class StoryController {
       ),
       "open-equilibrium-cost": formatNumber(
         open.pureNashEquilibria[0]!.physicalSocialCost.decimal,
-      ),
-      "open-equilibrium-exploitability": formatNumber(
-        open.pureNashEquilibria[0]!.exploitability.decimal,
       ),
       "open-optimum-counts": profileText(open.socialOptima[0]!.routeCounts),
       "open-optimum-average": formatNumber(
@@ -397,9 +590,6 @@ export class StoryController {
       "closed-equilibrium-average": formatNumber(
         closed.pureNashEquilibria[0]!.averagePhysicalLatency.decimal,
       ),
-      "closed-equilibrium-cost": formatNumber(
-        closed.pureNashEquilibria[0]!.physicalSocialCost.decimal,
-      ),
       "tolled-equilibrium-counts": profileText(
         tolled.pureNashEquilibria[0]!.routeCounts,
       ),
@@ -409,54 +599,52 @@ export class StoryController {
       .forEach((element) => {
         element.textContent = values[element.dataset.exact ?? ""] ?? "";
       });
+    const optimumCount = open.socialOptima.length;
+    document
+      .querySelectorAll<HTMLElement>("[data-optimum-wording]")
+      .forEach((element) => {
+        element.textContent =
+          optimumCount === 1
+            ? "the exact optimum"
+            : `one of ${optimumCount} tied exact optima`;
+      });
+    requireElement<HTMLElement>("#landscape-sampling-note").textContent =
+      this.bundle.potentialLandscape.sampling.statement;
+    this.rebuildPopulationCharts();
   }
 
-  private populateMethodology(): void {
-    const configuration = this.story.experiments.configuration;
-    const q = configuration.qLearning as Record<string, unknown>;
-    const values: [string, string][] = [
-      ["schema", this.story.schemaVersion],
-      ["agents", String(configuration.agents)],
-      ["Q-learning seeds per scenario", String(configuration.seedCount)],
-      ["episodes", String(q.episodes)],
-      ["alpha", String(q.alpha)],
-      ["epsilon floor", String(q.epsilonFloor)],
-      ["generator", String(this.story.seedPolicy.bitGenerator)],
-      [
-        "landscape vertices",
-        this.story.potentialLandscape.vertices.length.toLocaleString(),
-      ],
-    ];
-    const list = requireElement<HTMLDListElement>("#methodology-list");
-    list.replaceChildren(
-      ...values.map(([label, value]) => {
-        const row = document.createElement("div");
-        const term = document.createElement("dt");
-        term.textContent = label;
-        const definition = document.createElement("dd");
-        definition.textContent = value;
-        row.append(term, definition);
-        return row;
-      }),
+  private rebuildPopulationCharts(): void {
+    const openSnapshots = this.learningSnapshots("braess-open");
+    const openExact = this.bundle.exactAnalysis["braess-open"];
+    this.learningChart = createLearningChart(
+      requireElement("#learning-chart"),
+      openSnapshots,
+      openExact.pureNashEquilibria[0]!.averagePhysicalLatency.decimal,
+      openExact.socialOptima[0]!.averagePhysicalLatency.decimal,
     );
+    createRouteShareChart(requireElement("#route-share-chart"), openSnapshots);
+    createScenarioChart(requireElement("#scenario-chart"), this.bundle);
   }
 
-  private populateLearnerTable(): void {
-    const block = this.story.experiments.scenarios["braess-tolled"];
-    const rows: [string, LearnerBlock, string][] = [
+  private populateComparison(): void {
+    createLearnerChart(requireElement("#learner-chart"), this.comparisonBundle);
+    const comparison = this.comparisonBundle.comparison;
+    if (!comparison) return;
+    const block = comparison.scenarios["braess-tolled"];
+    const rows: [string, FinalSummary, string][] = [
       [
         "independent Q-learning",
-        block.qLearning,
+        block.qLearning.representativeSummary,
         "empirical epsilon-zero greedy evaluation",
       ],
       [
         "strict best response",
-        block.bestResponse,
+        block.bestResponse.representativeSummary,
         "exact potential descent to pure Nash",
       ],
       [
         "full-information Hedge",
-        block.hedge,
+        block.hedge.representativeSummary,
         "external-regret control, not last-iterate Nash",
       ],
     ];
@@ -464,30 +652,200 @@ export class StoryController {
       "#learner-table tbody",
     );
     body.replaceChildren(
-      ...rows.map(([name, learner, statement]) =>
-        this.learnerRow(name, learner.representative.summary, statement),
-      ),
+      ...rows.map(([name, summary, statement]) => {
+        const row = document.createElement("tr");
+        [
+          name,
+          profileText(summary.finalGreedyRouteCounts),
+          formatNumber(summary.physicalSocialCost),
+          formatNumber(summary.exploitability),
+          statement,
+        ].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        });
+        return row;
+      }),
     );
   }
 
-  private learnerRow(
-    name: string,
-    summary: FinalSummary,
-    statement: string,
-  ): HTMLTableRowElement {
-    const row = document.createElement("tr");
-    const values = [
-      name,
-      profileText(summary.finalGreedyRouteCounts),
-      formatNumber(summary.physicalSocialCost),
-      formatNumber(summary.exploitability),
-      statement,
-    ];
-    values.forEach((value) => {
-      const cell = document.createElement("td");
-      cell.textContent = value;
-      row.append(cell);
+  private bindControls(): void {
+    this.startButton.addEventListener("click", () => this.startJourney());
+    this.playPause.addEventListener("click", () => {
+      this.dispatchVisual(
+        { type: this.visual.playback === "playing" ? "PAUSE" : "PLAY" },
+        true,
+      );
     });
-    return row;
+    this.runLearning.addEventListener("click", () => this.startLearning(false));
+    this.runAgain.addEventListener("click", () => this.startLearning(true));
+    this.explore.addEventListener("click", () => this.scene?.toggleExplore());
+    this.reset.addEventListener("click", () => {
+      this.scene?.resetView();
+      this.dispatchVisual({ type: "RESET_VIEW" });
+    });
+    this.focusPrimary.addEventListener("click", () => {
+      const target: FocusTarget =
+        this.visual.sceneMode === "landscape" ? "equilibrium" : "shortcut";
+      this.dispatchVisual({ type: "FOCUS", target }, true);
+      this.scene?.focus(target);
+    });
+    this.focusSecondary.addEventListener("click", () => {
+      const target: FocusTarget =
+        this.visual.sceneMode === "landscape" ? "optimum" : "bottleneck";
+      this.dispatchVisual({ type: "FOCUS", target }, true);
+      this.scene?.focus(target);
+    });
+    document
+      .querySelectorAll<HTMLButtonElement>("[data-proceed-act]")
+      .forEach((button) => {
+        button.addEventListener("click", () =>
+          this.proceed(Number(button.dataset.proceedAct)),
+        );
+      });
+    document
+      .querySelectorAll<HTMLButtonElement>("[data-route-focus]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const route = button.dataset.routeFocus;
+          if (route !== "U" && route !== "L" && route !== "Z") return;
+          document
+            .querySelectorAll<HTMLButtonElement>("[data-route-focus]")
+            .forEach((candidate) =>
+              candidate.setAttribute(
+                "aria-pressed",
+                String(candidate === button),
+              ),
+            );
+          this.scene?.highlightRoute(route);
+          this.fallback?.highlightRoute(route);
+          this.stage.dataset.routeHighlight = route;
+          this.caption.textContent = `${button.textContent?.trim() ?? route} is highlighted as one complete route action.`;
+        });
+      });
+    document
+      .querySelectorAll<HTMLButtonElement>("button[data-population]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const population = Number(button.dataset.population);
+          if (
+            population === 100 ||
+            population === 1_000 ||
+            population === 10_000
+          ) {
+            void this.selectPopulation(population);
+          }
+        });
+      });
+    requireElement<HTMLButtonElement>("#replay-experiment").addEventListener(
+      "click",
+      () => {
+        void this.fullReplay();
+      },
+    );
+    window.addEventListener("keydown", this.guardLockedNavigation);
+    window.addEventListener("hashchange", this.guardHashNavigation);
   }
+
+  private readonly tick = (timestamp: number): void => {
+    this.animationFrame = requestAnimationFrame(this.tick);
+    if (!this.journey.started || this.visual.playback !== "playing") {
+      this.previousPlaybackTime = timestamp;
+      return;
+    }
+    const interval = this.visual.reducedMotion ? 260 : 72;
+    if (timestamp - this.previousPlaybackTime < interval) return;
+    this.previousPlaybackTime = timestamp;
+    const snapshots = this.learningSnapshots(this.visual.scenario);
+    const step = this.visual.reducedMotion
+      ? Math.max(1, Math.floor(snapshots.length / 4))
+      : 1;
+    const next = this.visual.snapshotIndex + step;
+    if (next >= snapshots.length - 1) {
+      this.visual = reduceStoryState(this.visual, {
+        type: "SET_SNAPSHOT",
+        index: snapshots.length - 1,
+      });
+      this.completeLearning();
+      return;
+    }
+    this.dispatchVisual({ type: "SET_SNAPSHOT", index: next });
+  };
+
+  private async fullReplay(): Promise<void> {
+    const defaultBundle = await loadPopulationBundle(
+      this.manifest.defaultPopulation,
+    );
+    this.bundle = defaultBundle;
+    this.scene?.setBundle(defaultBundle);
+    this.journey = reduceJourneyState(this.journey, { type: "FULL_RESET" });
+    this.visual = initialStoryState(this.visual.reducedMotion, 100);
+    document
+      .querySelectorAll<HTMLElement>(".chapter[data-story-act]")
+      .forEach((chapter) => {
+        chapter.hidden = Number(chapter.dataset.storyAct) !== 0;
+        chapter.classList.toggle(
+          "is-active",
+          Number(chapter.dataset.storyAct) === 0,
+        );
+      });
+    this.clearRouteHighlight();
+    this.scene?.resetView();
+    this.populateBundleContent();
+    this.learningSummary.textContent = "";
+    this.playbackStatus.textContent = "";
+    this.chapterStatus.textContent = "";
+    this.main.hidden = true;
+    this.opening.hidden = false;
+    document.body.classList.add("journey-locked");
+    document.body.dataset.journeyStarted = "false";
+    document.body.dataset.bundlePopulation = "100";
+    this.clearHash();
+    window.scrollTo({ top: 0, behavior: "auto" });
+    this.render();
+    this.startButton.focus({ preventScroll: true });
+  }
+
+  private clearRouteHighlight(): void {
+    delete this.stage.dataset.routeHighlight;
+    this.fallback?.clearHighlight();
+    document
+      .querySelectorAll<HTMLButtonElement>("[data-route-focus]")
+      .forEach((button) => button.setAttribute("aria-pressed", "false"));
+  }
+
+  private setPopulationButtonsDisabled(disabled: boolean): void {
+    document
+      .querySelectorAll<HTMLButtonElement>("button[data-population]")
+      .forEach((button) => {
+        button.disabled = disabled;
+      });
+  }
+
+  private clearHash(): void {
+    if (!window.location.hash) return;
+    history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
+  }
+
+  private readonly guardLockedNavigation = (event: KeyboardEvent): void => {
+    if (this.journey.started) return;
+    if (["End", "PageDown", "PageUp", "Home", " "].includes(event.key)) {
+      event.preventDefault();
+    }
+  };
+
+  private readonly guardHashNavigation = (): void => {
+    const target = window.location.hash
+      ? document.querySelector<HTMLElement>(window.location.hash)
+      : null;
+    if (!this.journey.started || target?.hidden) {
+      this.clearHash();
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+  };
 }

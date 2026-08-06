@@ -21,8 +21,8 @@ def quick_story() -> dict[str, object]:
 
 def test_landscape_topology_is_complete() -> None:
     landscape = build_potential_landscape()
-    assert len(landscape["vertices"]) == 3321  # type: ignore[arg-type]
-    assert len(landscape["triangles"]) == 6400  # type: ignore[arg-type]
+    assert len(landscape["vertices"]) == 5151  # type: ignore[arg-type]
+    assert len(landscape["triangles"]) == 10000  # type: ignore[arg-type]
 
 
 def test_story_is_deterministic_and_valid() -> None:

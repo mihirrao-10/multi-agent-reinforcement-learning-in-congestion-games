@@ -48,16 +48,18 @@ jobs:
 
       - name: Reproduce and validate deterministic story data
         run: |
-          congestion-marl export --output "${RUNNER_TEMP}/story-v1.json"
-          congestion-marl validate "${RUNNER_TEMP}/story-v1.json"
-          cmp "${RUNNER_TEMP}/story-v1.json" web/public/data/story-v1.json
+          congestion-marl export --output "${RUNNER_TEMP}/population-data"
+          congestion-marl validate "${RUNNER_TEMP}/population-data"
+          for file in manifest-v2.json population-100-v2.json population-1000-v2.json population-10000-v2.json; do
+            cmp "${RUNNER_TEMP}/population-data/${file}" "web/public/data/${file}"
+          done
 
       - name: Upload deterministic export diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: deterministic-export-diagnostic
-          path: ${{ runner.temp }}/story-v1.json
+          path: ${{ runner.temp }}/population-data
           if-no-files-found: ignore
           retention-days: 14
 

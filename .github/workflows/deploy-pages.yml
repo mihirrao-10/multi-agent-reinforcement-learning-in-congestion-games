@@ -34,7 +34,7 @@ jobs:
         run: python -m pip install .
 
       - name: Validate committed story data
-        run: congestion-marl validate web/public/data/story-v1.json
+        run: congestion-marl validate web/public/data
 
       - name: Set up Node
         uses: actions/setup-node@v6

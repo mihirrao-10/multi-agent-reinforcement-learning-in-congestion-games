@@ -15,16 +15,16 @@ lint:
 	.venv/bin/ruff check .
 
 typecheck:
-	.venv/bin/mypy
+	.venv/bin/python -m mypy
 
 test:
-	.venv/bin/pytest
+	.venv/bin/python -m pytest
 
 export:
-	.venv/bin/congestion-marl export --output web/public/data/story-v1.json
+	PYTHONPATH=src .venv/bin/python -m congestion_marl.cli export --output web/public/data
 
 validate:
-	.venv/bin/congestion-marl validate web/public/data/story-v1.json
+	PYTHONPATH=src .venv/bin/python -m congestion_marl.cli validate web/public/data
 
 web-check:
 	cd web && npm run check

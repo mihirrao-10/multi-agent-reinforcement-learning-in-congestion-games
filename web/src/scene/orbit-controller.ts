@@ -13,6 +13,44 @@ interface OrbitCallbacks {
   readonly onEscape: () => void;
 }
 
+export function pointerOrbitDelta(
+  dx: number,
+  dy: number,
+): {
+  azimuth: number;
+  elevation: number;
+} {
+  return { azimuth: dx * 0.007, elevation: dy * 0.006 };
+}
+
+export function trackpadOrbitDelta(
+  deltaX: number,
+  deltaY: number,
+): {
+  azimuth: number;
+  elevation: number;
+} {
+  return { azimuth: deltaX * 0.004, elevation: deltaY * 0.003 };
+}
+
+export function pinchDistanceScale(previous: number, current: number): number {
+  return previous / Math.max(current, 1);
+}
+
+export function keyboardOrbitDelta(
+  key: string,
+  step = 0.09,
+): {
+  azimuth: number;
+  elevation: number;
+} {
+  if (key === "ArrowLeft") return { azimuth: -step, elevation: 0 };
+  if (key === "ArrowRight") return { azimuth: step, elevation: 0 };
+  if (key === "ArrowUp") return { azimuth: 0, elevation: -step };
+  if (key === "ArrowDown") return { azimuth: 0, elevation: step };
+  return { azimuth: 0, elevation: 0 };
+}
+
 export class OrbitController {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly canvas: HTMLCanvasElement;
@@ -169,8 +207,10 @@ export class OrbitController {
         points[0]!.y - points[1]!.y,
       );
       if (this.previousPinchDistance > 0) {
-        this.desiredDistance *=
-          this.previousPinchDistance / Math.max(distance, 1);
+        this.desiredDistance *= pinchDistanceScale(
+          this.previousPinchDistance,
+          distance,
+        );
         this.desiredDistance = THREE.MathUtils.clamp(
           this.desiredDistance,
           2.5,
@@ -184,9 +224,10 @@ export class OrbitController {
       this.exploring ||
       Math.abs(dx) > Math.abs(dy)
     ) {
-      this.desiredAzimuth -= dx * 0.007;
+      const delta = pointerOrbitDelta(dx, dy);
+      this.desiredAzimuth += delta.azimuth;
       this.desiredElevation = THREE.MathUtils.clamp(
-        this.desiredElevation + dy * 0.006,
+        this.desiredElevation + delta.elevation,
         -1.12,
         1.12,
       );
@@ -208,9 +249,10 @@ export class OrbitController {
     if (!this.exploring && !event.ctrlKey) return;
     event.preventDefault();
     if (this.exploring && Math.abs(event.deltaX) > 0.1 && !event.ctrlKey) {
-      this.desiredAzimuth -= event.deltaX * 0.004;
+      const delta = trackpadOrbitDelta(event.deltaX, event.deltaY);
+      this.desiredAzimuth += delta.azimuth;
       this.desiredElevation = THREE.MathUtils.clamp(
-        this.desiredElevation + event.deltaY * 0.003,
+        this.desiredElevation + delta.elevation,
         -1.12,
         1.12,
       );
@@ -225,12 +267,11 @@ export class OrbitController {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    const rotationStep = 0.09;
-    if (event.key === "ArrowLeft") this.desiredAzimuth -= rotationStep;
-    else if (event.key === "ArrowRight") this.desiredAzimuth += rotationStep;
-    else if (event.key === "ArrowUp") this.desiredElevation += rotationStep;
-    else if (event.key === "ArrowDown") this.desiredElevation -= rotationStep;
-    else if (event.key === "+" || event.key === "=")
+    const delta = keyboardOrbitDelta(event.key);
+    if (delta.azimuth !== 0 || delta.elevation !== 0) {
+      this.desiredAzimuth += delta.azimuth;
+      this.desiredElevation += delta.elevation;
+    } else if (event.key === "+" || event.key === "=")
       this.desiredDistance *= 0.9;
     else if (event.key === "-" || event.key === "_")
       this.desiredDistance *= 1.1;

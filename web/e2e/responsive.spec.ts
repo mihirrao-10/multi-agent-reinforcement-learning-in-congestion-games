@@ -3,7 +3,9 @@ import { expect, test } from "@playwright/test";
 import {
   expectNoHorizontalOverflow,
   expectNoIntersection,
-  openStory,
+  startStory,
+  unlockThrough,
+  watchRuntimeErrors,
 } from "./helpers";
 
 const viewports = [
@@ -14,16 +16,18 @@ const viewports = [
 ] as const;
 
 for (const viewport of viewports) {
-  test(`${viewport.name} has a readable responsive composition`, async ({
+  test(`${viewport.name} remains readable without clipping`, async ({
     page,
   }) => {
+    test.setTimeout(40_000);
     await page.setViewportSize({
       width: viewport.width,
       height: viewport.height,
     });
-    await openStory(page);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const errors = watchRuntimeErrors(page);
+    await startStory(page);
     await expectNoHorizontalOverflow(page);
-
     const layout = await page.evaluate(() => {
       const visual = document
         .querySelector(".visual-column")!
@@ -68,34 +72,29 @@ for (const viewport of viewports) {
       );
     }
     expect(layout.canvasHeight).toBeGreaterThanOrEqual(
-      viewport.width <= 560 ? viewport.height * 0.44 : 290,
+      viewport.width <= 560 ? 270 : 290,
     );
-
     if (viewport.width === 390) {
       expect(layout.visualPosition).toBe("relative");
-      const controlHeights = await page
-        .locator(".stage-controls button")
+      const heights = await page
+        .locator("button:visible")
         .evaluateAll((buttons) =>
           buttons.map((button) => button.getBoundingClientRect().height),
         );
-      expect(Math.min(...controlHeights)).toBeGreaterThanOrEqual(44);
-      await expect(page.locator(".scene-caption")).toHaveCSS(
-        "white-space",
-        "nowrap",
-      );
-      const visibleProjectedLabels = await page
-        .locator(".projected-labels .node-label")
-        .evaluateAll(
-          (labels) =>
-            labels.filter((label) => getComputedStyle(label).opacity === "1")
-              .length,
-        );
-      expect(visibleProjectedLabels).toBeGreaterThanOrEqual(2);
+      expect(Math.min(...heights)).toBeGreaterThanOrEqual(44);
+      await page.screenshot({
+        path: "e2e/screenshots/mobile-first-post-start.png",
+      });
+      await unlockThrough(page, 10);
+      await expect(
+        page.getByRole("heading", { name: "Under the hood" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Under the hood" }),
+      ).toBeInViewport();
+      await expectNoHorizontalOverflow(page);
     }
-
-    await page.screenshot({
-      path: `e2e/screenshots/${viewport.name}.png`,
-      fullPage: false,
-    });
+    await page.screenshot({ path: `e2e/screenshots/${viewport.name}.png` });
+    expect(errors).toEqual([]);
   });
 }

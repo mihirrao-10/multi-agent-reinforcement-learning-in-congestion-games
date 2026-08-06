@@ -1,241 +1,136 @@
 # Interview Guide
 
-## The project in one sentence
+## Thirty-second explanation
 
-Eighty independent learners discover the unique Nash equilibrium of an atomic Braess congestion game, and exact enumeration proves that this learned equilibrium is inefficient until the incentives are changed.
+The project studies a finite Braess congestion game with independent tabular learners. Every agent can learn the privately attractive Shortcut correctly, yet the resulting exact equilibrium makes average latency 80 instead of the optimum 64.688. Removing the Shortcut lowers equilibrium latency to 65, while a discrete marginal-cost toll aligns private incentives with physical social cost. The public experience supports 100, 1,000, and 10,000 agents using exact population-specific analysis and separately computed trajectories.
 
-## A two-minute explanation
+The main lesson is that better learning does not repair a badly designed objective.
 
-This project asks a simple multi-agent learning question: what happens when every agent learns competently inside a poorly designed game?
+## What is technically distinctive?
 
-There are 80 labeled, unsplittable agents. Every episode, each agent chooses one complete route from a common source to a common destination. In the open Braess network, the routes are Upper, Lower, and Shortcut. Two edges have latency equal to half their load, two have constant latency 45, and the middle shortcut has zero physical latency.
+Four boundaries are explicit:
 
-Exact rational enumeration reduces the apparent `3^80` profile space to 3,321 route-count states. It proves that the only pure Nash equilibrium is `(0, 0, 80)`: everyone takes the shortcut, each experiences latency 80, and total physical cost is 6,400. The physical social optimum is `(35, 35, 10)`, with total cost 5,175 and average latency 64.6875. Therefore Price of Anarchy and Price of Stability are both `6400 / 5175 = 256 / 207`, about 1.236715.
+1. Exact game-theoretic claims use rational arithmetic and remove-then-add deviations.
+2. Learner outcomes remain empirical and include their seed and information assumptions.
+3. Large-population analysis exploits discrete convexity instead of enumerating 50 million states.
+4. The browser presents validated Python outputs and never trains agents or manufactures population results.
 
-Independent tabular Q-learning gives every agent its own three-value table. Agents act simultaneously, receive only their selected-route reward, and update independently. Across 64 fixed seeds, the open scenario's final epsilon-zero greedy policy reached the exact inefficient equilibrium every time. This is empirical evidence for this instance, not a general convergence theorem for independent Q-learning.
+## Explain the model
 
-The intervention matters more than learner sophistication. Removing the shortcut produces equilibrium `(40, 40)` and average latency 65. Discrete marginal-cost tolls on the two load-sensitive edges produce equilibrium `(35, 35, 10)`, exactly the physical optimum. Python owns every numerical result and exports deterministic JSON. The browser validates that file and tells the story using one Three.js network, a complete potential landscape, native SVG charts, and an accessible SVG fallback.
-
-## A ten-minute explanation
-
-### 1. Model the game
-
-An **atomic congestion game** has discrete players who choose resource sets. Here a resource is a directed edge and an action is one complete source-to-destination route. **Unsplittable** means a player chooses exactly one route in an episode rather than dividing one unit of flow among routes.
-
-Let the route-count vector be `(x_U, x_L, x_Z)`, where `U`, `L`, and `Z` denote Upper, Lower, and Shortcut. The edge loads on `S -> U` and `V -> T` are `x_U + x_Z` and `x_L + x_Z`. The remaining used outer edges have constant cost 45, and the shortcut has cost zero. Thus
+There are `N` labeled atomic agents. Each chooses Upper, Lower, or Shortcut as one complete action. The variable edges use `40x/N`; the outer constant edges cost 45; the central edge costs zero. For counts `(x_U, x_L, x_Z)`:
 
 ```text
-J_U = (x_U + x_Z) / 2 + 45
-J_L = 45 + (x_L + x_Z) / 2
-J_Z = (x_U + x_Z) / 2 + (x_L + x_Z) / 2
+J_U = 40(x_U + x_Z)/N + 45
+J_L = 45 + 40(x_L + x_Z)/N
+J_Z = 40(x_U + x_Z)/N + 40(x_L + x_Z)/N.
 ```
 
-A player's route cost is the sum of edge latencies on the route after that player is included. Physical social cost is the sum of every player's physical route latency, equivalently `sum_e x_e c_e(x_e)`.
+The normalization preserves the same intended Braess structure at every supported population.
 
-### 2. Derive the canonical outcomes
+## Why does every agent use the Shortcut at equilibrium?
 
-At `(0, 0, 80)`, both variable edges have load 80. A Shortcut user pays `40 + 40 = 80`. If that player deviates to Upper, the post-deviation loads give `79 / 2 + 45 = 84.5`; Lower is symmetric. No unilateral deviation helps, so exploitability is zero.
-
-The equilibrium physical social cost is
+At `(0, 0, N)`, every agent pays 80. If one agent moves to Upper, remove that agent from Shortcut first. The candidate then pays
 
 ```text
-80 agents * 80 latency = 6400.
+40(N - 1)/N + 45,
 ```
 
-At `(35, 35, 10)`, both variable edges have load 45. Upper and Lower users each pay `22.5 + 45 = 67.5`; Shortcut users pay `22.5 + 22.5 = 45`. Physical social cost is
+which is greater than 80 for the supported populations. Lower is symmetric. No unilateral switch helps, so all Shortcut is a pure Nash equilibrium.
+
+At `N = 100`, total physical cost is 8,000. The exact physical optimum `(44, 44, 12)` costs 6,468.8. Price of Anarchy is `5000/4043`.
+
+## Why remove before adding?
+
+The moving agent changes the loads on every edge it leaves and joins. Pricing a candidate against the original count state can count that agent twice or leave it on an abandoned edge. The code forms
 
 ```text
-35(67.5) + 35(67.5) + 10(45) = 5175,
-5175 / 80 = 64.6875.
+x' = x - one_hot(origin) + one_hot(candidate)
 ```
 
-Exact enumeration proves this is the unique physical optimum. Since the open equilibrium is also unique,
+before evaluating candidate cost. This same accounting is used for equilibrium, exploitability, best response, and regret counterfactuals.
+
+## How can 10,000-agent analysis remain exact?
+
+The open social objective and Rosenthal potential each separate as `f(x_U) + f(x_L)` for an exact discrete-convex component. Scanning one component over `0..N` finds every component minimum. Feasible pairs give every optimum, and potential minima give every equilibrium. The closed game needs only one scan.
+
+This exact `O(N)` routine is exhaustively compared with complete enumeration at multiple small populations. The analyzer can report that the 10,000-agent game has 50,015,001 open count states without constructing them.
+
+The browser surface is deliberately different: it uses a fixed 2,145-vertex sample of the exact potential formula. Exact equilibrium, optimum, active-profile, and path markers are not snapped to that sample.
+
+## What does Q-learning do?
+
+Each agent owns a separate Q row and receives only experienced selected-route reward. All agents choose before rewards are evaluated, then update only the selected entry:
 
 ```text
-PoA = PoS = 6400 / 5175 = 256 / 207 = 1.2367149758...
+Q_i(a_i) <- Q_i(a_i) + 0.15 [r_i - Q_i(a_i)].
 ```
 
-Closing the shortcut leaves `(x_U, x_L)` with `x_U + x_L = 80`. Exact enumeration gives the unique equilibrium and optimum `(40, 40)`. Each route costs `40 / 2 + 45 = 65`, so total cost is 5,200. Relative to the open equilibrium, average latency falls by `(80 - 65) / 80 = 18.75%`.
+The other learners make each agent's environment nonstationary. The project therefore does not transfer the standard single-agent Q-learning convergence theorem. It reports observed training paths and a separate epsilon-zero final evaluation.
 
-### 3. Connect incentives to the potential
+The canonical 100-agent study uses 64 Q seeds per scenario and 5,000 episodes. The 1,000- and 10,000-agent presets use one declared audited vectorized run per scenario, with 3,200 and 2,400 episodes. Their uncertainty is not compared with the replicated study.
 
-Rosenthal's potential for the untolled game is
+## Why include best response and Hedge?
+
+They expose the role of information.
+
+- Strict best response has exact model access. Each accepted move strictly lowers private cost and Rosenthal potential.
+- Hedge receives the full counterfactual cost vector for every action. Its external-regret interpretation concerns time-average play, not last-iterate pure Nash convergence.
+- Independent Q-learning sees only its selected-route reward.
+
+The comparison is not a leaderboard because the feedback assumptions differ.
+
+## How do the tolls work?
+
+For `c_N(x) = 40x/N`, the variable edges receive
 
 ```text
-Phi(x) = sum(k/2, k=1..x_U+x_Z)
-       + 45(x_U + x_L)
-       + sum(k/2, k=1..x_L+x_Z).
+tau_N(x) = (x - 1)[c_N(x) - c_N(x - 1)] = 40(x - 1)/N.
 ```
 
-For a unilateral move, remove the moving player from the old route, add the player to the new route, and recompute the affected loads. The exact-potential identity is
+Then perceived edge cost telescopes:
 
 ```text
-Phi(after) - Phi(before)
-  = perceived_cost_of_new_route(after)
-  - perceived_cost_of_old_route(before).
+sum(k=1..x) [c_N(k) + tau_N(k)] = x c_N(x).
 ```
 
-The implementation checks this identity with exact rational arithmetic for all 19,440 feasible directed deviations in each three-route scenario and all 160 in the two-route scenario. A strict best response has a negative private-cost change, so it strictly lowers a potential with finitely many states. That is why asynchronous strict best response terminates at a pure Nash equilibrium and cannot cycle.
+Summing across edges makes tolled perceived potential equal physical social cost. Toll payments remain transfers, so the physical objective itself does not include them.
 
-### 4. Explain the learners and their information
+## How is determinism protected?
 
-**Independent Q-learning.** Agent `i` owns one row `Q_i`, with one value per available route. All agents choose from unchanged pre-reward tables, so the joint update is simultaneous. Each agent observes only the cost of the selected route and applies
+NumPy `SeedSequence` derives run seeds from base seed `20260804`. Every run then spawns separate PCG64 streams for exploration, tie-breaking, scenario initialization, aggregation, representative playback, and greedy evaluation. Stable JSON ordering and finite-number serialization exclude wall-clock data. A second full export produces identical bytes.
 
-```text
-Q_i(a_i) <- Q_i(a_i) + alpha [-J_i(a_i) - Q_i(a_i)].
-```
+## How is the public data honest at scale?
 
-There is no next-state bootstrap term. Each episode is a one-stage repeated decision, so `gamma = 0`. The public run uses 5,000 episodes, `alpha = 0.15`, and epsilon `max(0.01, 0.80 * 0.999^(t-1))`. Initial values are zero. Training exploration is not reused for the reported final profile: a separate epsilon-zero greedy evaluation uses a separate random stream for deterministic tie-breaking.
+The page initially loads a manifest and the 100-agent bundle. The larger bundles are fetched only when selected. They contain actual selected-population Q-learning snapshots and exact selected-population profiles. They do not contain copied route-share curves, population-sized assignment arrays, or millions of landscape vertices.
 
-There is no neural network because each agent has only two or three actions and no state variable. A table is sufficient, transparent, and directly inspectable.
+The renderer uses one bead per agent at 100. Larger presets cap visible beads at 180 and assign exact integer weights by deterministic largest remainder. The legend states the approximate bead weight, while all metrics retain exact route counts.
 
-**Asynchronous strict best response.** One labeled agent at a time gets exact model access, chooses a strictly cheaper route if one exists, and moves. Seeded permutations determine update order. This is a theory-aligned diagnostic, not a same-information competitor to Q-learning.
+## Why the guided Start and Proceed flow?
 
-**Hedge.** Every agent maintains stable log weights and receives the full exact counterfactual route-cost vector. With learning rate `eta = 0.18`, it multiplicatively downweights costly actions. Hedge's information assumption is stronger than Q-learning's.
+The initial waiting state prevents an unexplained episode counter and arbitrary profile from appearing as fact. Start opens only the question. Proceed introduces a route as an action, then congestion and reward, then the independent Q update. Learning requires a separate `Run learning with N agents` action. Metrics appear only after they have meaning, and exploitability waits until the equilibrium chapter.
 
-Adapting opponents make each independent Q-learner's reward distribution nonstationary. The classic single-agent Q-learning convergence result cannot simply be transferred to this setting. The project therefore compares empirical outcomes against exact benchmarks and makes no general independent-Q convergence claim.
+Locked chapters are truly hidden and absent from accessibility navigation. Population changes reset only playback, retain already unlocked explanations, and never mix metrics across bundles. Full replay returns to the title, 100 agents, waiting state, first chapter, and authored camera.
 
-### 5. Explain the diagnostics
+## How was the interface verified?
 
-A pure Nash profile has no profitable unilateral deviation. The implementation defines **exploitability** as the largest available one-player cost improvement under exact remove-then-add accounting. It is zero exactly when no player can strictly improve.
+- Python formatting, lint, strict typing, coverage, exact-model, learner, determinism, export, and performance checks.
+- TypeScript strict compilation, ESLint, Zod validation, numerical re-derivation, and Vitest state and geometry tests.
+- Chromium Playwright journeys at 1440, 1280, tablet, and mobile widths.
+- Keyboard, reduced motion, trackpad-equivalent wheel, pointer orbit, lazy population loading, SVG fallback, and replay checks.
+- Screenshot inspection of every major narrative state and both scale cohorts.
+- Production base-path and deployed-asset verification on GitHub Pages.
 
-For a player over `T` training rounds, external regret is
+## Limitations to state plainly
 
-```text
-sum_t realized_cost_t - min_a sum_t counterfactual_cost_t(a).
-```
+- This is one symmetric atomic routing family, not a general transportation model.
+- Agents choose complete routes from a fixed small action set.
+- No queueing, capacity, spillback, continuous time, or microscopic vehicle dynamics are modeled.
+- Independent-Q outcomes can depend on hyperparameters and seeds.
+- The larger studies have one run per scenario and do not estimate uncertainty.
+- Hedge and best response receive stronger feedback than Q-learning.
+- Toll conclusions belong to this authored objective and are not policy advice.
+- Particle motion is an encoding of assignment and relative latency, not a traffic forecast.
 
-The counterfactual cost treats the player's actual action as removed before adding the fixed alternative. The project reports cumulative and per-round regret by agent. Low external regret concerns time-averaged play; it does not prove that a last sampled or greedy profile is a pure Nash equilibrium. If every player has vanishing external regret, the empirical joint-play distribution has the standard coarse-correlated-equilibrium interpretation, but this project does not export a separate finite-sample CCE certificate.
+## Useful closing line
 
-### 6. Explain the toll intervention
-
-The two variable edges use the discrete marginal-cost toll
-
-```text
-tau(x) = (x - 1) [c(x) - c(x - 1)] = (x - 1) / 2.
-```
-
-The two constant edges and zero-cost shortcut have zero toll. Players learn from physical latency plus toll, but reported physical social cost excludes toll payments because they are transfers, not travel time.
-
-For a variable edge,
-
-```text
-sum(k=1..x) [c(k) + tau(k)]
-= sum(k=1..x) [k/2 + (k-1)/2]
-= x^2 / 2
-= x c(x).
-```
-
-Summing over edges makes perceived Rosenthal potential equal physical social cost at every count state. Consequently, the unique potential minimum for this authored finite game is the unique physical optimum `(35, 35, 10)`, which is also the unique tolled equilibrium. This uniqueness is project-specific, not a universal statement about marginal-cost tolls in every atomic congestion game.
-
-### 7. Explain the experiment and presentation boundary
-
-The full experiment matrix has 64 deterministic seeds per scenario for Q-learning, 64 for Hedge, and 16 seeded update orders for best response. A representative run is selected as the medoid minimizing total pairwise L1 distance between final route-count vectors. Lower exploitability and then lower seed break ties. It is never selected for a pleasing animation.
-
-Python exports the exact model, full exact analyses, seed summaries, aggregate statistics, representative learner state and snapshots, all 3,321 potential-surface vertices, and all 6,400 triangles. Stable ordering and isolated PCG64 random streams make the canonical bundle byte reproducible. The browser does not train agents. TypeScript validates the schema and re-derives important numerical identities before rendering.
-
-## Definitions worth giving precisely
-
-- **Edge load:** the number of agents whose selected routes contain that edge.
-- **Route cost:** the sum of the costs of the route's edges at the joint profile's resulting loads.
-- **Social cost:** the sum of all agents' physical route costs, not perceived toll-inclusive costs.
-- **Pure Nash equilibrium:** a profile in which no one player can lower perceived cost by changing route alone.
-- **Social optimum:** a feasible profile minimizing physical social cost.
-- **Price of Anarchy:** worst equilibrium physical social cost divided by optimal physical social cost.
-- **Price of Stability:** best equilibrium physical social cost divided by optimal physical social cost.
-- **Braess's paradox:** adding an apparently helpful route or edge can worsen selfish-routing equilibrium performance.
-- **Exact potential:** a scalar whose change under every unilateral move equals that mover's perceived-cost change.
-- **External regret:** excess realized cumulative cost relative to the best fixed action in hindsight.
-
-## How every visual encoding maps to mathematics
-
-| Visual encoding | Mathematical quantity |
-| --- | --- |
-| Edge tube thickness | Exported edge load |
-| Variable-edge hue from green to orange-red | Exported physical edge latency under a fixed global scale |
-| Shortcut's neutral gold color | Its zero physical latency, never falsely colored as congested |
-| 80 instanced particles | 80 labeled route assignments |
-| Particle speed | Relative exported route cost for the selected route |
-| Route-count chips and textual metrics | One exact exported snapshot |
-| Potential surface height | Affine normalization of exact potential under shared fixed bounds |
-| Surface color | Exact objective value under the same deterministic scale |
-| Surface trajectory | Exported representative route-count snapshots |
-| Nash and optimum markers | Exact enumerated count states |
-| Toll morph | Interpolation from original potential to tolled perceived potential |
-
-Geometric and camera transitions can interpolate smoothly. Numerical text is never interpolated: it always belongs to a specific exported snapshot. Particle motion is an assignment visualization, not a continuous-time traffic simulation.
-
-## Performance and engineering choices
-
-- One persistent Three.js renderer serves the network and potential chapters.
-- `InstancedMesh` represents all 80 agents with one draw-efficient structure.
-- The five directed edges use deterministic curves and stable geometry.
-- The complete 3,321-vertex, 6,400-triangle lattice is generated once and updated in place during the toll morph.
-- Pixel ratio is capped, resize work is scheduled, and hidden scenes stop unnecessary animation work.
-- Native SVG handles charts because the plots are small, semantic, and easier to make accessible than another canvas.
-- The deterministic JSON is fetched once, validated with Zod, and treated as immutable story state.
-- Vite emits static assets under the repository subpath for GitHub Pages.
-
-## Accessibility talking points
-
-- The page uses semantic landmarks, headings, buttons, chapter labels, and status regions.
-- Every control is keyboard reachable and has a visible focus treatment.
-- Camera controls support keyboard input as well as mouse, trackpad, and touch.
-- The active scene description and focus status update for assistive technology.
-- `prefers-reduced-motion` is observed at load time and when the preference changes.
-- With reduced motion, playback and scene transitions settle immediately instead of forcing animation.
-- A deliberate WebGL failure path renders an accessible SVG network with the same route and load story.
-- Charts have text descriptions, labeled axes, and non-color distinctions.
-- Color is paired with thickness, text, shape, or position and is never the only carrier of meaning.
-
-## Likely technical questions
-
-### Why enumerate count states instead of labeled profiles?
-
-The game is symmetric: cost and welfare depend on route counts, not player identities. Nonnegative triples summing to 80 number `C(82,2) = 3,321`, while labeled profiles number `3^80`. Count-state enumeration preserves every distinct cost outcome and makes exhaustive exact checks feasible.
-
-### Why must deviations use remove-then-add accounting?
-
-The moving player contributes to the old loads. Counterfactual cost on the new route must be evaluated after removing that contribution and adding the player to the new route. Evaluating the target against the unchanged aggregate can be off by one on shared edges and can invalidate equilibrium, regret, and potential checks.
-
-### Is `(35, 35, 10)` a Nash equilibrium in the untolled game?
-
-No. It is the physical optimum, but its incentives are unstable without tolls. For example, an Upper user at that profile pays 67.5 and can move to Shortcut, where the post-move variable loads are 45 and 46, for cost 45.5. It becomes the unique equilibrium only in the tolled scenario.
-
-### Why is the open optimum allowed to send some agents through the shortcut?
-
-The shortcut itself is free and can be socially useful in moderation. The harm comes from the load its users add to both variable edges. Exact enumeration balances that externality at ten Shortcut users, not zero.
-
-### Why is gamma zero?
-
-There is no state transition whose future return should be bootstrapped. Each episode is one simultaneous route choice followed by one cost. Using a positive discount factor would imply a continuing-state model that this experiment does not have.
-
-### Is Q-learning really multi-agent here?
-
-Yes. Eighty separate learners update from a shared joint outcome, and each learner changes the environment faced by the others. It is deliberately the simplest independent MARL setting: no central controller, critic, sharing, or communication.
-
-### Does low Hedge regret imply convergence to Nash?
-
-No. Vanishing external regret supports a statement about empirical joint-play distributions and coarse correlated equilibrium. It does not guarantee last-iterate pure-Nash convergence. The exported Hedge final profiles and exploitability make that distinction visible.
-
-### Why use population standard deviation rather than sample standard deviation?
-
-The public statistics describe the complete predeclared 64-run deterministic experiment matrix rather than estimating dispersion from an accidental subsample. The export records population standard deviation (`ddof = 0`) and standard error `sigma / sqrt(64)`. These are run-to-run summaries, not confidence intervals for a universal population.
-
-### Why not train in JavaScript?
-
-Keeping model, exact analysis, learning, and export in Python produces one auditable numerical authority. The browser only validates and presents immutable data, which prevents timing, frame rate, or device differences from changing the scientific claims.
-
-### What would you change for a larger problem?
-
-Count-state enumeration and per-agent tables would eventually become infeasible. Possible extensions include structured optimization, sampled equilibrium diagnostics, function approximation, richer state, or graph-based policies. Those would change the scientific question and introduce approximation error, so they are outside this project's intentionally exact scope.
-
-## Established theory versus project-specific work
-
-Established theory supplies atomic congestion games, Rosenthal potential, finite-improvement arguments, Nash equilibrium, Braess's paradox, Price of Anarchy, Q-learning, Hedge, and the no-regret connection to time-averaged equilibrium concepts.
-
-Project-specific work includes the 80-agent integer scaling, the exact latency constants, the three authored scenarios, all hyperparameters and seed namespaces, the medoid representative rule, the snapshot schedule, the finite-instance toll result, the deterministic data contract, and every visual encoding. The project applies established ideas carefully; it does not claim a new theorem.
-
-## Honest limitations
-
-This is one symmetric atomic routing game. All 80 agents share one source and destination and choose one complete route from two or three options per episode. There is no continuous-time traffic, queueing model, or physical capacity model beyond the authored latency functions. Q-learning behavior can depend on hyperparameters and exploration, and adapting agents make the environment nonstationary. Hedge and best response receive stronger information than Q-learning. Toll payments are treated as transfers. Results are educational evidence for this finite model, not transportation-policy advice or a real traffic forecast.
+The agents did not fail to learn. They learned the incentives they were given.

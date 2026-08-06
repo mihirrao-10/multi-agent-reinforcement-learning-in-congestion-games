@@ -1,6 +1,9 @@
 import * as THREE from "three";
 
-import type { StoryData, StorySnapshot } from "../data/story-schema";
+import type {
+  NetworkPresentation,
+  PopulationBundle,
+} from "../data/story-schema";
 import type { FocusTarget, StoryState } from "../story/state-machine";
 import { cameraPoseForChapter } from "./camera-poses";
 import { CongestionScene, NODE_POSITIONS } from "./congestion-scene";
@@ -16,12 +19,12 @@ interface SceneCallbacks {
 
 export class SceneController {
   private readonly canvas: HTMLCanvasElement;
-  private readonly story: StoryData;
+  private bundle: PopulationBundle;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(36, 1, 0.02, 80);
   private readonly network = new CongestionScene();
-  private readonly landscape: PotentialLandscape;
+  private landscape: PotentialLandscape;
   private readonly controls: OrbitController;
   private readonly labels: ProjectedLabels;
   private readonly upperCornerLabel: HTMLSpanElement;
@@ -38,16 +41,17 @@ export class SceneController {
   private activeChapter = -1;
   private visible = !document.hidden;
   private disposed = false;
+  private needsRender = true;
 
   constructor(
     canvas: HTMLCanvasElement,
     labelContainer: HTMLElement,
-    story: StoryData,
+    story: PopulationBundle,
     reducedMotion: boolean,
     callbacks: SceneCallbacks,
   ) {
     this.canvas = canvas;
-    this.story = story;
+    this.bundle = story;
     this.reducedMotion = reducedMotion;
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -122,14 +126,15 @@ export class SceneController {
 
   setState(
     state: StoryState,
-    snapshot: StorySnapshot,
+    snapshot: NetworkPresentation | null,
     totalSnapshots: number,
   ): void {
+    this.needsRender = true;
     this.reducedMotion = state.reducedMotion;
     this.controls.setReducedMotion(state.reducedMotion);
     this.targetNetworkOpacity = state.sceneMode === "network" ? 1 : 0;
     this.network.setScenario(state.shortcutOpen, state.tollsActive);
-    this.network.setSnapshot(snapshot);
+    this.network.setPresentation(snapshot, state.population, state.waiting);
     if (
       state.focusTarget === "shortcut" ||
       state.focusTarget === "bottleneck"
@@ -153,9 +158,14 @@ export class SceneController {
     this.landscape.setTrajectory(trajectoryName, activeTrajectoryIndex);
     this.labels.setMode(state.sceneMode);
     this.equilibriumLabel.textContent = "Nash equilibrium";
+    const optimumCount = this.bundle.potentialLandscape.markers.optima.length;
     this.optimumLabel.textContent = state.tollsActive
-      ? "social optimum = tolled equilibrium"
-      : "social optimum";
+      ? optimumCount > 1
+        ? `${optimumCount} tied optima = tolled equilibria`
+        : "social optimum = tolled equilibrium"
+      : optimumCount > 1
+        ? `${optimumCount} tied exact optima`
+        : "an exact social optimum";
     this.labels.setEnabled(this.equilibriumLabel, !state.tollsActive);
     this.updateLandscapeLabels();
     if (state.activeChapter !== this.activeChapter) {
@@ -171,31 +181,56 @@ export class SceneController {
     this.canvas.dataset.scenario = state.scenario;
     this.canvas.dataset.shortcut = state.shortcutOpen ? "open" : "closed";
     this.canvas.dataset.tolls = state.tollsActive ? "active" : "inactive";
-    this.canvas.dataset.episode = String(snapshot.episode);
-    this.canvas.dataset.routeCounts = snapshot.routeCounts.join(",");
+    this.canvas.dataset.episode =
+      snapshot && "episode" in snapshot ? String(snapshot.episode) : "";
+    this.canvas.dataset.routeCounts = snapshot
+      ? snapshot.routeCounts.join(",")
+      : "waiting";
+    this.canvas.dataset.population = String(state.population);
+    this.canvas.dataset.presentationState = state.waiting
+      ? "waiting"
+      : "snapshot";
     this.canvas.dataset.focusTarget = state.focusTarget;
     this.canvas.dataset.userExploring = String(state.userExploring);
     this.canvas.dataset.reducedMotion = String(state.reducedMotion);
     this.canvas.dataset.trajectory = state.trajectory;
+    this.canvas.dataset.directionalArrows =
+      state.trajectory === "best-response" ? "downhill" : "none";
     this.canvas.dataset.surface = state.tollsActive
       ? "physical-social-cost"
       : "rosenthal-potential";
   }
 
   toggleExplore(): void {
+    this.needsRender = true;
     this.controls.toggleExplore();
   }
 
   resetView(): void {
+    this.needsRender = true;
     this.controls.reset();
   }
 
   focus(target: FocusTarget): void {
+    this.needsRender = true;
     this.applyFocus(target);
   }
 
   highlightRoute(route: "U" | "L" | "Z"): void {
+    this.needsRender = true;
     this.network.focus(route);
+  }
+
+  setBundle(bundle: PopulationBundle): void {
+    if (bundle === this.bundle) return;
+    this.needsRender = true;
+    this.scene.remove(this.landscape.group);
+    this.landscape.dispose();
+    this.bundle = bundle;
+    this.landscape = new PotentialLandscape(bundle);
+    this.scene.add(this.landscape.group);
+    this.activeChapter = -1;
+    this.updateLandscapeLabels();
   }
 
   dispose(): void {
@@ -212,9 +247,7 @@ export class SceneController {
   }
 
   private landscapeTrajectoryLength(name: string): number {
-    return (
-      this.story.potentialLandscape.trajectoryVertexIndices[name]?.length ?? 0
-    );
+    return this.landscape.trajectoryLength(name);
   }
 
   private applyFocus(target: FocusTarget): void {
@@ -227,10 +260,14 @@ export class SceneController {
 
   private readonly onVisibilityChange = (): void => {
     this.visible = !document.hidden;
-    if (this.visible) this.clock.getDelta();
+    if (this.visible) {
+      this.clock.getDelta();
+      this.needsRender = true;
+    }
   };
 
   private resize(): void {
+    this.needsRender = true;
     const width = Math.max(1, this.canvas.clientWidth);
     const height = Math.max(1, this.canvas.clientHeight);
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.65);
@@ -244,6 +281,7 @@ export class SceneController {
     if (this.disposed) return;
     this.animationFrame = requestAnimationFrame(this.animate);
     if (!this.visible) return;
+    if (this.reducedMotion && !this.needsRender) return;
     const frameSeconds = Math.min(this.clock.getDelta(), 0.1);
     const elapsed = this.clock.elapsedTime;
     this.networkOpacity = this.reducedMotion
@@ -280,6 +318,7 @@ export class SceneController {
     this.canvas.dataset.animationFrame = String(
       Number(this.canvas.dataset.animationFrame ?? 0) + 1,
     );
+    this.needsRender = false;
   };
 
   private applyGroupOpacity(group: THREE.Group, weight: number): void {
@@ -331,7 +370,7 @@ export class SceneController {
       this.optimumLabel,
       this.landscape
         .focusPosition("optimum")
-        .add(new THREE.Vector3(0, 0.18, 0)),
+        .add(new THREE.Vector3(-0.42, -0.25, 0.08)),
     );
   }
 }

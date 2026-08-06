@@ -1,5 +1,5 @@
 dist
 node_modules
-public/data/story-v1.json
+public/data/*.json
 playwright-report
 test-results

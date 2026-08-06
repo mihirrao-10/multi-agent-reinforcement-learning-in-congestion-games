@@ -26,8 +26,7 @@ export function createScenarioChart(
   scenarios.forEach((scenario, scenarioIndex) => {
     const exact = story.exactAnalysis[scenario.key];
     const learned =
-      story.experiments.scenarios[scenario.key].qLearning.representative
-        .summary;
+      story.learning.scenarios[scenario.key].representative.summary;
     const values = [
       exact.pureNashEquilibria[0]!.averagePhysicalLatency.decimal,
       learned.averagePhysicalLatency,

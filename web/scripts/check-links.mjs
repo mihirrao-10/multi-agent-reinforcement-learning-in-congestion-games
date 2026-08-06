@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
@@ -20,4 +20,18 @@ const required = [
 ];
 for (const link of required) {
   if (!html.includes(link)) throw new Error(`Required link is absent: ${link}`);
+}
+
+for (const path of [
+  "../docs/interview-guide.md",
+  "../docs/course-map.md",
+  "../docs/experiment-methodology.md",
+  "public/data/manifest-v2.json",
+  "public/data/population-100-v2.json",
+  "public/data/population-1000-v2.json",
+  "public/data/population-10000-v2.json",
+]) {
+  if (!existsSync(resolve(root, path))) {
+    throw new Error(`Required local publication asset is absent: ${path}`);
+  }
 }

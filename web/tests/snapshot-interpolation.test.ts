@@ -7,8 +7,7 @@ import { loadFixture } from "./fixtures";
 describe("snapshot and display interpolation boundaries", () => {
   it("always returns an exact exported textual snapshot", () => {
     const snapshots =
-      loadFixture().experiments.scenarios["braess-open"].qLearning
-        .representative.snapshots;
+      loadFixture().learning.scenarios["braess-open"].representative.snapshots;
     expect(exactSnapshotAtIndex(snapshots, -100)).toBe(snapshots[0]);
     expect(exactSnapshotAtIndex(snapshots, 4.49)).toBe(snapshots[4]);
     expect(exactSnapshotAtIndex(snapshots, 4.51)).toBe(snapshots[5]);

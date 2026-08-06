@@ -13,15 +13,16 @@ from congestion_marl.games.costs import (
 
 def test_edge_latency_functions_and_tolls() -> None:
     assert variable_latency(0) == 0
-    assert variable_latency(80) == 40
+    assert variable_latency(100) == 40
+    assert variable_latency(80, 80) == 40
     assert [variable_latency(load) for load in range(5)] == sorted(
         variable_latency(load) for load in range(5)
     )
-    assert constant_latency(0) == constant_latency(80) == 45
-    assert zero_latency(80) == 0
+    assert constant_latency(0) == constant_latency(100) == 45
+    assert zero_latency(100) == 0
     assert marginal_externality_toll(0) == 0
-    assert marginal_externality_toll(80) == Fraction(79, 2)
-    assert perceived_variable_cost(45) == Fraction(89, 2)
+    assert marginal_externality_toll(100) == Fraction(198, 5)
+    assert perceived_variable_cost(45) == Fraction(178, 5)
 
 
 @pytest.mark.parametrize(

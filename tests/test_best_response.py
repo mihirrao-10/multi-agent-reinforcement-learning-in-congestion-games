@@ -9,16 +9,16 @@ def test_best_response_is_deterministic_strict_and_terminating() -> None:
     game = BraessGame(Scenario.OPEN)
     first = run_best_response(game, 123)
     second = run_best_response(game, 123)
-    assert first.final_greedy_counts == second.final_greedy_counts == (0, 0, 80)
+    assert first.final_greedy_counts == second.final_greedy_counts == (0, 0, 100)
     potential = first.state["potentialPath"]
     assert isinstance(potential, list)
     assert all(left > right for left, right in pairwise(potential))
-    states = first.state["acceptedMoveAssignments"]
+    states = first.state["acceptedMoveCountStates"]
     assert isinstance(states, list)
     assert len({tuple(state) for state in states}) == len(states)
 
 
 def test_tolled_best_response_reaches_tolled_equilibrium() -> None:
     run = run_best_response(BraessGame(Scenario.TOLLED), 8)
-    assert run.final_greedy_counts == (35, 35, 10)
+    assert run.final_greedy_counts == (44, 44, 12)
     assert run.final_exploitability == 0

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-POPULATION = 80
+POPULATION = 100
+SUPPORTED_POPULATIONS = (100, 1_000, 10_000)
 BASE_SEED = 20260804
 
 
@@ -66,3 +67,28 @@ class ExperimentConfig:
     def __post_init__(self) -> None:
         if self.seeds < 1 or self.best_response_seeds < 1:
             raise ValueError("seed counts must be positive")
+        if self.q_learning.agents != self.hedge.agents:
+            raise ValueError("Q-learning and Hedge populations must agree")
+
+    @property
+    def population(self) -> int:
+        return self.q_learning.agents
+
+
+def experiment_config_for_population(population: int) -> ExperimentConfig:
+    """Return the public audited study configuration for a supported population."""
+
+    if population not in SUPPORTED_POPULATIONS:
+        raise ValueError(f"unsupported public population {population}")
+    if population == POPULATION:
+        return ExperimentConfig()
+    # Large presets retain one deterministic audited run per scenario. Fewer
+    # episodes keep the public regeneration path practical while the separate
+    # epsilon-zero evaluation remains unchanged.
+    episodes = 3_200 if population == 1_000 else 2_400
+    return ExperimentConfig(
+        seeds=1,
+        best_response_seeds=1,
+        q_learning=QLearningConfig(agents=population, episodes=episodes),
+        hedge=HedgeConfig(agents=population, episodes=episodes),
+    )

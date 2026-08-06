@@ -10,12 +10,18 @@ from typing import cast
 
 from congestion_marl.analysis.enumeration import analyze_scenario
 from congestion_marl.benchmarking import benchmark_suite
-from congestion_marl.config import BASE_SEED, ExperimentConfig, HedgeConfig, QLearningConfig
+from congestion_marl.config import (
+    BASE_SEED,
+    POPULATION,
+    ExperimentConfig,
+    HedgeConfig,
+    QLearningConfig,
+)
 from congestion_marl.export.json_writer import write_deterministic_json
-from congestion_marl.export.story import build_story
+from congestion_marl.export.story import export_population_data
 from congestion_marl.export.validation import (
     StoryValidationError,
-    validate_story,
+    validate_export_directory,
     validate_story_file,
 )
 from congestion_marl.games.braess import BraessGame
@@ -123,22 +129,35 @@ def _compare(args: argparse.Namespace) -> int:
 
 
 def _export(args: argparse.Namespace) -> int:
-    payload = build_story()
-    validate_story(payload)
     output = Path(args.output)
-    write_deterministic_json(output, payload)
-    print(f"wrote validated schema 1.0.0 story data to {output}")
+    paths = export_population_data(output)
+    validate_export_directory(output)
+    sizes = ", ".join(
+        f"{population:,}: {path.stat().st_size:,} bytes" for population, path in paths.items()
+    )
+    print(f"wrote validated schema 2.0.0 population data to {output} ({sizes})")
     return 0
 
 
 def _validate(args: argparse.Namespace) -> int:
-    payload = validate_story_file(args.path)
-    landscape = cast(dict[str, object], payload["potentialLandscape"])
-    print(
-        f"valid story schema {payload['schemaVersion']}: "
-        f"{len(cast(list[object], landscape['vertices']))} states, "
-        f"{len(cast(list[object], landscape['triangles']))} triangles"
-    )
+    path = Path(args.path)
+    if path.is_dir():
+        payloads = validate_export_directory(path)
+        descriptions = []
+        for population, payload in payloads.items():
+            landscape = cast(dict[str, object], payload["potentialLandscape"])
+            vertex_count = len(cast(list[object], landscape["vertices"]))
+            descriptions.append(f"{population:,} agents: {vertex_count:,} vertices")
+        description = ", ".join(descriptions)
+        print(f"valid population-aware schema 2.0.0 ({description})")
+    else:
+        payload = validate_story_file(args.path)
+        landscape = cast(dict[str, object], payload["potentialLandscape"])
+        print(
+            f"valid population bundle schema {payload['schemaVersion']}: "
+            f"{payload['population']:,} agents, "
+            f"{len(cast(list[object], landscape['vertices'])):,} sampled vertices"
+        )
     return 0
 
 
@@ -164,7 +183,7 @@ def build_parser() -> argparse.ArgumentParser:
     simulate.add_argument(
         "--learner", choices=("q-learning", "hedge", "best-response"), default="q-learning"
     )
-    simulate.add_argument("--agents", type=int, default=80)
+    simulate.add_argument("--agents", type=int, default=POPULATION)
     simulate.add_argument("--episodes", type=int, default=5000)
     simulate.add_argument("--seed", type=int, default=BASE_SEED)
     simulate.add_argument("--json", action="store_true")
@@ -174,7 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
         "enumerate", help="enumerate all symmetric count states exactly"
     )
     enumerate_parser.add_argument("--scenario", type=_scenario, default=Scenario.OPEN)
-    enumerate_parser.add_argument("--agents", type=int, default=80)
+    enumerate_parser.add_argument("--agents", type=int, default=POPULATION)
     enumerate_parser.add_argument("--json", action="store_true")
     enumerate_parser.set_defaults(handler=_enumerate)
 
@@ -185,7 +204,7 @@ def build_parser() -> argparse.ArgumentParser:
     compare.set_defaults(handler=_compare)
 
     export = subparsers.add_parser("export", help="generate authoritative versioned story JSON")
-    export.add_argument("--output", default="web/public/data/story-v1.json")
+    export.add_argument("--output", default="web/public/data")
     export.set_defaults(handler=_export)
 
     validate = subparsers.add_parser("validate", help="validate a story JSON bundle")

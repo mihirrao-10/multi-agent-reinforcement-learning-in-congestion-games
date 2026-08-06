@@ -14,6 +14,8 @@ export function createRouteShareChart(
   const height = 150;
   const margin = { left: 42, right: 12, top: 18, bottom: 24 };
   const maximumEpisode = snapshots.at(-1)?.episode ?? 1;
+  const population =
+    snapshots[0]?.routeCounts.reduce((sum, count) => sum + count, 0) ?? 1;
   const x = linearScale(
     [0, maximumEpisode],
     [margin.left, width - margin.right],
@@ -36,7 +38,7 @@ export function createRouteShareChart(
       d: linePath(
         snapshots.map((snapshot) => ({
           x: x(snapshot.episode),
-          y: y((snapshot.routeCounts[route] ?? 0) / 80),
+          y: y((snapshot.routeCounts[route] ?? 0) / population),
         })),
       ),
       class: classes[route]!,

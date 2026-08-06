@@ -1,127 +1,108 @@
-# Course Map and Verified References
+# Course Map and Theory Boundary
 
-This map separates the theory inherited from the literature from the modeling, experimental, and visual decisions made in this repository. It intentionally avoids unverified theorem, chapter, and page numbers.
+## Purpose
 
-## Established theory
+This map separates established theory from project-specific modeling, computation, and empirical evidence. The implementation notes are in [experiment-methodology.md](experiment-methodology.md), and the spoken narrative is in [interview-guide.md](interview-guide.md).
 
-| Project concept | Authoritative source | How it is used here |
+## Core sources
+
+| Topic | Source | Project use |
 | --- | --- | --- |
-| Finite congestion games and exact potential | Robert W. Rosenthal, [A class of games possessing pure-strategy Nash equilibria](https://doi.org/10.1007/BF01737559), *International Journal of Game Theory* 2, 65-67 (1973) | The project implements the Rosenthal potential as a sum of resource costs over integer loads. Exact potential change equals the moving player's perceived-cost change. |
-| Braess's paradox | Dietrich Braess, Anna Nagurney, and Tina Wakolbinger, [On a Paradox of Traffic Planning](https://doi.org/10.1287/trsc.1050.0127), *Transportation Science* 39(4), 446-450 (2005 English translation of the 1968 work) | The open network has a free middle link that makes the unique selfish equilibrium worse than the equilibrium after that link is removed. |
-| Selfish routing and inefficiency | Tim Roughgarden, [Selfish Routing and the Price of Anarchy](https://mitpress.mit.edu/9780262549325/selfish-routing-and-the-price-of-anarchy/), MIT Press (first edition 2005) | Supplies the broader framework for comparing equilibrium routing cost with optimal routing cost. |
-| Price of Anarchy in selfish routing | Tim Roughgarden and Éva Tardos, [How Bad Is Selfish Routing?](https://doi.org/10.1145/506147.506153), *Journal of the ACM* 49(2), 236-259 (2002) | Motivates the exact equilibrium-to-optimum cost ratio. This project computes a finite atomic instance exactly rather than importing a general bound. |
-| Algorithmic game theory vocabulary and methods | Noam Nisan, Tim Roughgarden, Éva Tardos, and Vijay V. Vazirani, editors, [Algorithmic Game Theory](https://assets.cambridge.org/97805218/72829/frontmatter/9780521872829_frontmatter.pdf), Cambridge University Press (2007) | Provides authoritative context for equilibria, routing games, inefficiency, learning, and mechanisms. |
-| Multi-agent learning and game-theoretic foundations | Yoav Shoham and Kevin Leyton-Brown, [Multiagent Systems: Algorithmic, Game-Theoretic, and Logical Foundations](https://www.cambridge.org/core/books/multiagent-systems/B11B69E0CB9032D6EC0A254F59922360), Cambridge University Press (2008) | Frames the distinction between single-agent learning in a fixed environment and learning while other agents adapt. |
-| Tabular Q-learning | Christopher J. C. H. Watkins and Peter Dayan, [Q-learning](https://doi.org/10.1007/BF00992698), *Machine Learning* 8, 279-292 (1992) | Supplies the selected-action temporal-difference update. The single-agent convergence result is not claimed for this nonstationary independent multi-agent setting. |
-| Hedge and multiplicative weights | Yoav Freund and Robert E. Schapire, [A Decision-Theoretic Generalization of On-Line Learning and an Application to Boosting](https://doi.org/10.1006/jcss.1997.1504), *Journal of Computer and System Sciences* 55(1), 119-139 (1997) | Motivates one full-information multiplicative-weights learner per agent. The implementation uses normalized costs and stable log weights. |
-| Online learning and external regret | Nicolò Cesa-Bianchi and Gábor Lugosi, [Prediction, Learning, and Games](https://www.cambridge.org/core/books/prediction-learning-and-games/A05C9F6ABC752FAB8954C885D0065C8F), Cambridge University Press (2006) | Provides the standard fixed-action-in-hindsight regret framework used for the per-agent diagnostic. |
-| No-regret learning and coarse correlated equilibrium | Tim Roughgarden, [Twenty Lectures on Algorithmic Game Theory](https://theory.stanford.edu/~tim/f13/f13.pdf), Stanford course notes (2013) | Supports the standard time-average statement: when every player's external regret is small, empirical joint play is an approximate coarse correlated equilibrium. It does not imply last-iterate pure Nash convergence. |
+| Finite congestion games and exact potential | Robert W. Rosenthal, [A class of games possessing pure-strategy Nash equilibria](https://doi.org/10.1007/BF01737559), 1973 | Defines the potential construction and finite-improvement logic. |
+| Braess paradox | Dietrich Braess, Anna Nagurney, and Tina Wakolbinger, [On a Paradox of Traffic Planning](https://doi.org/10.1287/trsc.1050.0127), 2005 English translation | Supplies the canonical network paradox and incentive question. |
+| Selfish routing and inefficiency | Tim Roughgarden and Éva Tardos, [How Bad Is Selfish Routing?](https://doi.org/10.1145/506147.506153), 2002 | Supplies the welfare comparison vocabulary and broader routing context. |
+| Algorithmic game theory | Noam Nisan, Tim Roughgarden, Éva Tardos, and Vijay Vazirani, editors, [Algorithmic Game Theory](https://www.cambridge.org/core/books/algorithmic-game-theory/009ED727A216D3A49905F8673CAAC04A), 2007 | Background for congestion games, equilibrium, Price of Anarchy, and learning in games. |
+| Multi-agent systems | Yoav Shoham and Kevin Leyton-Brown, [Multiagent Systems](http://www.masfoundations.org/), 2009 | Frames strategic interaction and information assumptions. |
+| Tabular Q-learning | Christopher Watkins and Peter Dayan, [Q-learning](https://doi.org/10.1007/BF00992698), 1992 | Supplies the tabular update, not a convergence claim for adapting independent agents. |
+| Reinforcement learning | Richard Sutton and Andrew Barto, [Reinforcement Learning: An Introduction](http://incompleteideas.net/book/the-book-2nd.html), second edition | Background for value estimates, exploration, and one-stage repeated decisions. |
+| Hedge | Yoav Freund and Robert Schapire, [A Decision-Theoretic Generalization of On-Line Learning and an Application to Boosting](https://doi.org/10.1006/jcss.1997.1504), 1997 | Supplies the full-information exponential-weights baseline. |
+| External regret | Nicolò Cesa-Bianchi and Gábor Lugosi, [Prediction, Learning, and Games](https://www.cambridge.org/core/books/prediction-learning-and-games/A05C9F6ABC752FAB8954C885D0065C8F), 2006 | Supplies the fixed-action-in-hindsight regret framework. |
+| Regret and empirical play | Tim Roughgarden, [Twenty Lectures on Algorithmic Game Theory](https://theory.stanford.edu/~tim/f13/f13.pdf), 2013 | Supports the time-average connection to coarse correlated equilibrium, not last-iterate Nash. |
 
-The links above resolve to publisher, journal, author, or DOI records. Bibliographic details were checked against those records on 2026-08-05.
+## Established theory used directly
 
-## What the project takes from those sources
+### Congestion potential
 
-### Congestion games and potential
-
-Rosenthal's construction applies to finite congestion games in which a player's cost is the sum of resource costs. For integer edge load `x_e`, the potential contribution is
+For integer edge load `x_e`, Rosenthal's potential contribution is
 
 ```text
 sum(k=1..x_e) c_e(k).
 ```
 
-Under a unilateral change, contributions on unchanged resources cancel and the remaining difference is exactly the mover's cost difference. The project verifies that identity across every feasible count-state deviation instead of treating the theorem as an unchecked implementation assumption.
+Under a unilateral route change, unchanged edge contributions cancel and the remaining potential difference equals the mover's perceived-cost difference. A finite sequence of accepted strict cost improvements therefore cannot cycle.
 
-The finite-improvement consequence is also established theory: every accepted strict cost improvement strictly decreases potential, and a finite game cannot have an infinite strictly descending path. The seeded asynchronous best-response baseline is a direct computational realization of that argument.
+The repository still checks the identity exhaustively on small populations so a coding error cannot hide behind the theorem.
 
-### Braess's paradox and selfish routing
+### Braess and welfare
 
-Braess's paradox is the canonical observation that adding network capacity or an apparently attractive link can make selfishly chosen routes worse. The literature supplies the concept and canonical network structure. This repository instantiates an integer, unsplittable 80-agent version with two `x / 2` edges, two constant-45 edges, and one zero-cost shortcut.
+The recognizable Braess family has one source, one destination, two outer routes, and a central connection that combines their congestion-sensitive portions. Selfish use of the added link can make equilibrium travel worse. Price of Anarchy and Price of Stability compare equilibrium cost with optimum cost.
 
-Price of Anarchy and Price of Stability are established comparisons between equilibrium welfare and optimum welfare. Their project values, both `256 / 207`, are derived by exhaustive exact analysis of this particular finite instance. They are not quoted from the general selfish-routing results.
+The values `5000/4043`, `(0, 0, 100)`, and `(44, 44, 12)` are not literature constants. They are exact outputs of this authored normalized finite model.
 
-### Learning
+### Q-learning
 
-Watkins and Dayan analyze tabular Q-learning in a single-agent Markov decision setting under assumptions that do not match 80 independently adapting agents. The project reuses the tabular update but limits its claim to observed outcomes under a predeclared experiment matrix.
+The tabular Q update is established. Standard single-agent convergence assumptions do not match independently adapting agents whose joint choices change rewards. The project reuses the update and reports finite empirical outcomes without claiming a transferred theorem.
 
-Hedge is an established full-information online-learning method. External regret compares realized cumulative cost to the cumulative cost of the best fixed action in hindsight. If all players have at most `epsilon` average external regret, their empirical joint-play distribution has the usual `epsilon` coarse-correlated-equilibrium guarantee. That statement concerns an empirical distribution over play, not the last action profile, a sampled profile, or the final mode of a policy.
+### Hedge and regret
 
-This implementation reports agent-level regret summaries and last-profile exploitability separately. It does not relabel low regret as pure Nash convergence and does not claim a standalone CCE certification beyond the standard interpretation of the reported finite regrets.
+Hedge is a full-information online-learning method. External regret compares realized cumulative cost with the best fixed action in hindsight. Small external regret for every player supports a statement about empirical time-average play. It does not by itself show that the final profile, policy mode, or sampled last action is a pure Nash equilibrium.
 
-## Canonical example versus authored scaling
+## Project-specific model choices
 
-The following elements come from the recognizable Braess example family:
+- Supported populations `100`, `1,000`, and `10,000`.
+- Labeled, atomic, unsplittable agents with complete-route actions.
+- Variable costs `40x/N`, constant costs 45, and a zero-cost central edge.
+- Route codes `U`, `L`, and `Z`.
+- Physical social cost as total physical latency.
+- Discrete toll `40(x - 1)/N` on the variable edges.
+- Scenarios `braess-open`, `braess-closed`, and `braess-tolled`.
+- An exact discrete-convex `O(N)` reduction for equilibrium and optimum.
 
-- one source and one destination;
-- two outer paths;
-- a middle shortcut that combines the variable parts of both paths;
-- selfish use of the added shortcut worsening equilibrium travel time;
-- improvement when the shortcut is removed.
-
-The following are project-specific choices:
-
-- 80 labeled atomic agents;
-- unsplittable complete-route actions;
-- variable costs `x / 2` and constant costs 45;
-- route codes `U`, `L`, and `Z`;
-- exact count-state enumeration rather than a nonatomic flow derivation;
-- physical social cost as the sum of physical latency;
-- the discrete toll `tau(x) = (x - 1) / 2` on the variable edges;
-- three scenarios named `braess-open`, `braess-closed`, and `braess-tolled`.
-
-These choices yield the project-specific outcomes `(0, 0, 80)`, `(40, 40)`, and `(35, 35, 10)`. No source is being credited with those exact authored 80-agent numerical outputs.
+These choices preserve the intended Braess structure as population changes. They can produce tied adjacent integer optima, so the implementation returns complete sets and avoids universal uniqueness language.
 
 ## Project-specific learning design
 
-None of these values is a literature default or a claimed optimum:
-
-| Decision | Project value |
+| Decision | Public value |
 | --- | --- |
-| Q-learning episodes | 5,000 |
-| Q-learning step size | `alpha = 0.15` |
+| Q step size | `alpha = 0.15` |
 | Initial Q values | `0` |
 | Exploration | `max(0.01, 0.80 * 0.999^(t-1))` |
-| Final Q evaluation | epsilon zero with isolated tie-breaking stream |
-| Hedge episodes | 5,000 |
-| Hedge learning rate | `eta = 0.18` |
-| Q-learning and Hedge seeds | 64 per scenario and learner |
-| Best-response update orders | 16 per scenario |
+| Final evaluation | epsilon zero with isolated tie-breaking stream |
+| Canonical Q and Hedge study | 5,000 episodes, 64 seeds per scenario |
+| Canonical best response | 16 update orders per scenario |
+| 1,000-agent Q scale study | 3,200 episodes, one seed per scenario |
+| 10,000-agent Q scale study | 2,400 episodes, one seed per scenario |
+| Hedge rate | `eta = 0.18` |
 | Base seed | `20260804` |
-| Representative run | final-count medoid, then exploitability, then seed |
+| Representative | final-count medoid, exploitability, then seed |
 
-Each Q-learning agent owns a separate table. Actions are selected simultaneously before costs and updates are computed. Hedge receives the complete exact counterfactual cost vector; best response receives exact model access; Q-learning sees only experienced selected-route reward. These information assumptions intentionally differ and are stated wherever algorithms are compared.
+All Q agents choose before rewards are computed and update selected entries only. Hedge receives the complete counterfactual vector. Best response receives exact model access.
 
-## Project-specific visual and data design
+## Project-specific presentation design
 
-The literature does not prescribe the presentation. This repository authors:
+- A title-only Start screen and one-act-at-a-time guided journey.
+- A real waiting state with no fabricated episode or route metrics.
+- A shared Three.js network with top camera controls and bottom population controls.
+- One bead per agent at 100, and 180 deterministic weighted cohorts at scale.
+- Load encoded by bead density and slight radius change.
+- Physical latency encoded redundantly by green-to-red hue and traversal speed.
+- A complete 100-agent potential surface and deterministic fixed-resolution scale samples.
+- Exact markers, a validated strict-best-response path, and Q traces without downhill claims.
+- Native SVG charts, KaTeX, and a state-equivalent SVG network fallback.
+- Manifest-based lazy data loading and byte-deterministic public bundles.
 
-- a braided, orbitable Three.js network rather than a literal city map;
-- edge thickness as load and variable-edge hue as physical latency;
-- a neutral shortcut color that remains truthful to zero physical latency;
-- 80 instanced particles as route-assignment marks;
-- a complete triangular potential landscape with 3,321 vertices and 6,400 triangles;
-- one shared potential-height scale for the untolled and tolled surfaces;
-- exact Nash and social-optimum markers plus an exported learning trajectory;
-- ten scrollytelling chapters and an explicit Explore view;
-- an SVG fallback for WebGL failure;
-- a Python-owned, versioned, byte-deterministic public data bundle.
+Visual interpolation never creates a numerical claim. Textual values come from exact profiles or exported measured snapshots.
 
-The renderer can interpolate visual geometry, camera poses, and material properties. It does not interpolate or invent numerical claims. Textual metrics always correspond to exact exported snapshots.
+## Empirical observations, not theorems
 
-## Empirical observations, not established theorems
+- The canonical open representative and all canonical open final greedy profiles reach all Shortcut.
+- The committed scale trajectories have distinct selected-population training endpoints.
+- Epsilon-zero greedy evaluations of the two public scale runs reach all Shortcut.
+- The canonical tolled representative is near an exact optimum but need not equal it in every run.
+- Low Hedge regret does not force every final profile to be a pure equilibrium.
 
-The following statements describe this committed deterministic experiment only:
+Changing episode count, exploration, step size, initialization, feedback, or seeds can change empirical outcomes. Exact game analysis does not depend on those choices.
 
-- all 64 open-scenario independent-Q seeds had final greedy counts `(0, 0, 80)`;
-- 63 of 64 closed-scenario independent-Q seeds had `(40, 40)`, with one run one agent away;
-- the representative tolled independent-Q seed had `(35, 35, 10)`, zero exploitability, and physical social cost 5,175;
-- tolled independent-Q physical social cost had mean 5,178.5625, population standard deviation 8.7180, and standard error 1.0898 across the 64 fixed seeds;
-- all 16 seeded strict best-response runs reached the unique exact equilibrium in every scenario;
-- low Hedge external regret did not guarantee that every final sampled profile was a pure Nash equilibrium.
+## Suggested reading path
 
-Changing episode count, exploration, learning rate, initialization, feedback, or random seeds can change empirical learning behavior. Exact equilibrium and optimum claims do not depend on those learner settings because they come from exhaustive rational enumeration.
-
-## Reading path
-
-For a game theory course, begin with Rosenthal, Braess, Roughgarden and Tardos, then the relevant routing and learning material in *Algorithmic Game Theory*. For a multi-agent systems course, pair Shoham and Leyton-Brown with the project's information-assumption comparison. For reinforcement learning, read Watkins and Dayan before examining why the project's nonstationarity prevents a direct convergence claim. For online learning, pair Freund and Schapire with Cesa-Bianchi and Lugosi, then use Roughgarden's notes for the careful connection from external regret to empirical coarse correlated equilibrium.
-
-The implementation-level bridge from those sources to this repository is documented in [experiment-methodology.md](experiment-methodology.md), and a spoken explanation is organized in [interview-guide.md](interview-guide.md).
+For game theory, begin with Rosenthal and Braess, then selfish-routing welfare and the congestion-game chapters of *Algorithmic Game Theory*. For reinforcement learning, read Watkins and Dayan plus Sutton and Barto, then identify which single-agent assumptions fail here. For online learning, pair Freund and Schapire with Cesa-Bianchi and Lugosi, then use Roughgarden's notes for the careful empirical-distribution interpretation.

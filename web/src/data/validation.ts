@@ -1,11 +1,17 @@
-import type { ScenarioId, StoryData, StorySnapshot } from "./story-schema";
+import type {
+  NetworkPresentation,
+  PopulationBundle,
+  ScenarioId,
+  StoryManifest,
+  StorySnapshot,
+} from "./story-schema";
 
 export class StoryConsistencyError extends Error {
   override readonly name = "StoryConsistencyError";
 }
 
 function assertClose(actual: number, expected: number, label: string): void {
-  if (!Number.isFinite(actual) || Math.abs(actual - expected) > 1e-9) {
+  if (!Number.isFinite(actual) || Math.abs(actual - expected) > 1e-8) {
     throw new StoryConsistencyError(
       `${label} disagrees: ${actual} versus ${expected}`,
     );
@@ -15,10 +21,11 @@ function assertClose(actual: number, expected: number, label: string): void {
 export function deriveEdgeLoads(
   counts: readonly number[],
   scenario: ScenarioId,
+  population = 100,
 ): Record<string, number> {
   const [upper = 0, lower = 0, shortcut = 0] = counts;
-  if (counts.reduce((total, value) => total + value, 0) !== 80) {
-    throw new StoryConsistencyError("route counts must sum to eighty");
+  if (counts.reduce((total, value) => total + value, 0) !== population) {
+    throw new StoryConsistencyError(`route counts must sum to ${population}`);
   }
   if (scenario === "braess-closed" && counts.length !== 2) {
     throw new StoryConsistencyError(
@@ -37,25 +44,39 @@ export function deriveEdgeLoads(
 export function derivePhysicalRouteCosts(
   counts: readonly number[],
   scenario: ScenarioId,
+  population = 100,
 ): number[] {
-  const loads = deriveEdgeLoads(counts, scenario);
-  const upper = loads.SU! / 2 + 45;
-  const lower = 45 + loads.VT! / 2;
+  const loads = deriveEdgeLoads(counts, scenario, population);
+  const upper = (40 * loads.SU!) / population + 45;
+  const lower = 45 + (40 * loads.VT!) / population;
   if (scenario === "braess-closed") return [upper, lower];
-  return [upper, lower, loads.SU! / 2 + loads.VT! / 2];
+  return [upper, lower, (40 * (loads.SU! + loads.VT!)) / population];
 }
 
 export function derivePhysicalSocialCost(
   counts: readonly number[],
   scenario: ScenarioId,
+  population = 100,
 ): number {
-  const loads = deriveEdgeLoads(counts, scenario);
-  return loads.SU! ** 2 / 2 + loads.VT! ** 2 / 2 + 45 * (loads.UT! + loads.SV!);
+  const loads = deriveEdgeLoads(counts, scenario, population);
+  return (
+    (40 * (loads.SU! ** 2 + loads.VT! ** 2)) / population +
+    45 * (loads.UT! + loads.SV!)
+  );
 }
 
 export function validateSnapshot(
   snapshot: StorySnapshot,
   scenario: ScenarioId,
+  population = 100,
+): void {
+  validatePresentation(snapshot, scenario, population);
+}
+
+export function validatePresentation(
+  snapshot: NetworkPresentation,
+  scenario: ScenarioId,
+  population = 100,
 ): void {
   const routeCount = scenario === "braess-closed" ? 2 : 3;
   if (snapshot.routeCounts.length !== routeCount) {
@@ -63,29 +84,17 @@ export function validateSnapshot(
       "snapshot route dimension disagrees with scenario",
     );
   }
-  const assignmentCounts = Array.from({ length: routeCount }, () => 0);
-  for (const assignment of snapshot.assignments) {
-    if (assignment < 0 || assignment >= routeCount) {
-      throw new StoryConsistencyError(
-        "snapshot contains an unavailable route assignment",
-      );
-    }
-    assignmentCounts[assignment]! += 1;
-  }
-  if (
-    assignmentCounts.some(
-      (count, index) => count !== snapshot.routeCounts[index],
-    )
-  ) {
-    throw new StoryConsistencyError("assignments disagree with route counts");
-  }
-  const loads = deriveEdgeLoads(snapshot.routeCounts, scenario);
+  const loads = deriveEdgeLoads(snapshot.routeCounts, scenario, population);
   for (const [edge, load] of Object.entries(loads)) {
     if (snapshot.edgeLoads[edge] !== load) {
       throw new StoryConsistencyError(`edge load ${edge} disagrees`);
     }
   }
-  const routeCosts = derivePhysicalRouteCosts(snapshot.routeCounts, scenario);
+  const routeCosts = derivePhysicalRouteCosts(
+    snapshot.routeCounts,
+    scenario,
+    population,
+  );
   routeCosts.forEach((cost, index) =>
     assertClose(
       snapshot.routePhysicalCosts[index]!,
@@ -93,85 +102,109 @@ export function validateSnapshot(
       `route cost ${index}`,
     ),
   );
-  const socialCost = derivePhysicalSocialCost(snapshot.routeCounts, scenario);
+  const socialCost = derivePhysicalSocialCost(
+    snapshot.routeCounts,
+    scenario,
+    population,
+  );
   assertClose(snapshot.physicalSocialCost, socialCost, "physical social cost");
   assertClose(
     snapshot.averagePhysicalLatency,
-    socialCost / 80,
+    socialCost / population,
     "average latency",
   );
 }
 
-export function validateStoryConsistency(story: StoryData): void {
-  if (story.potentialLandscape.vertices.length !== 3321) {
-    throw new StoryConsistencyError(
-      "potential landscape must contain 3321 vertices",
-    );
+export function validateManifestConsistency(manifest: StoryManifest): void {
+  const populations = manifest.populations.map((entry) => entry.agents);
+  if (populations.join(",") !== "100,1000,10000") {
+    throw new StoryConsistencyError("manifest population options disagree");
   }
-  if (story.potentialLandscape.triangles.length !== 6400) {
-    throw new StoryConsistencyError(
-      "potential landscape must contain 6400 triangles",
-    );
+  if (new Set(manifest.populations.map((entry) => entry.bundle)).size !== 3) {
+    throw new StoryConsistencyError("population bundle paths must be distinct");
   }
-  const stateKeys = new Set<string>();
-  for (const vertex of story.potentialLandscape.vertices) {
-    const key = vertex.routeCounts.join(",");
-    if (
-      stateKeys.has(key) ||
-      vertex.routeCounts.reduce((sum, value) => sum + value, 0) !== 80
-    ) {
-      throw new StoryConsistencyError(
-        "potential landscape has a duplicate or invalid state",
-      );
-    }
-    stateKeys.add(key);
-  }
-  for (const triangle of story.potentialLandscape.triangles) {
-    if (
-      new Set(triangle).size !== 3 ||
-      triangle.some(
-        (index) =>
-          index < 0 || index >= story.potentialLandscape.vertices.length,
-      )
-    ) {
-      throw new StoryConsistencyError(
-        "potential landscape has an invalid triangle",
-      );
-    }
+}
+
+export function validateBundleConsistency(bundle: PopulationBundle): void {
+  const population = bundle.population;
+  if (
+    bundle.waitingState.waitingCount !== population ||
+    Object.values(bundle.waitingState.edgeLoads).some((load) => load !== 0)
+  ) {
+    throw new StoryConsistencyError("pre-experiment waiting state disagrees");
   }
   for (const scenario of [
     "braess-open",
     "braess-closed",
     "braess-tolled",
   ] as const) {
-    const block = story.experiments.scenarios[scenario];
-    for (const learner of [block.qLearning, block.hedge]) {
-      let previousEpisode = -1;
-      for (const snapshot of learner.representative.snapshots) {
-        if (snapshot.episode <= previousEpisode) {
-          throw new StoryConsistencyError(
-            "snapshot episodes must increase strictly",
-          );
-        }
-        validateSnapshot(snapshot, scenario);
-        previousEpisode = snapshot.episode;
+    validatePresentation(
+      bundle.scenarioStates[scenario].equilibrium,
+      scenario,
+      population,
+    );
+    validatePresentation(
+      bundle.scenarioStates[scenario].optimum,
+      scenario,
+      population,
+    );
+    const learner = bundle.learning.scenarios[scenario];
+    let previousEpisode = 0;
+    for (const snapshot of learner.representative.snapshots) {
+      if (snapshot.episode <= previousEpisode) {
+        throw new StoryConsistencyError(
+          "snapshot episodes must increase strictly",
+        );
       }
+      validateSnapshot(snapshot, scenario, population);
+      previousEpisode = snapshot.episode;
+    }
+    if (learner.representative.learnerState.qValueShape[0] !== population) {
+      throw new StoryConsistencyError(
+        "learner shape disagrees with population",
+      );
     }
   }
-  const open = story.exactAnalysis["braess-open"];
-  const closed = story.exactAnalysis["braess-closed"];
-  const tolled = story.exactAnalysis["braess-tolled"];
-  if (open.pureNashEquilibria[0]?.routeCounts.join(",") !== "0,0,80") {
-    throw new StoryConsistencyError("open equilibrium is not canonical");
+  const open = bundle.exactAnalysis["braess-open"];
+  const closed = bundle.exactAnalysis["braess-closed"];
+  const tolled = bundle.exactAnalysis["braess-tolled"];
+  if (
+    open.pureNashEquilibria[0]?.routeCounts.join(",") !== `0,0,${population}`
+  ) {
+    throw new StoryConsistencyError("open equilibrium disagrees");
   }
-  if (open.socialOptima[0]?.routeCounts.join(",") !== "35,35,10") {
-    throw new StoryConsistencyError("open optimum is not canonical");
+  if (
+    closed.pureNashEquilibria[0]!.routeCounts.reduce(
+      (sum, value) => sum + value,
+      0,
+    ) !== population ||
+    tolled.pureNashEquilibria[0]!.routeCounts.reduce(
+      (sum, value) => sum + value,
+      0,
+    ) !== population
+  ) {
+    throw new StoryConsistencyError("scenario profile population disagrees");
   }
-  if (closed.pureNashEquilibria[0]?.routeCounts.join(",") !== "40,40") {
-    throw new StoryConsistencyError("closed equilibrium is not canonical");
+  const landscape = bundle.potentialLandscape;
+  if (landscape.vertices.length !== landscape.sampling.sampledVertexCount) {
+    throw new StoryConsistencyError("landscape sample count disagrees");
   }
-  if (tolled.pureNashEquilibria[0]?.routeCounts.join(",") !== "35,35,10") {
-    throw new StoryConsistencyError("tolled equilibrium is not canonical");
+  if (
+    new Set(landscape.vertices.map((vertex) => vertex.routeCounts.join(",")))
+      .size !== landscape.vertices.length
+  ) {
+    throw new StoryConsistencyError(
+      "landscape contains duplicate exact states",
+    );
+  }
+  if (
+    population > 100 &&
+    landscape.sampling.mode !== "deterministic-barycentric-sample"
+  ) {
+    throw new StoryConsistencyError("large landscape must be labeled sampled");
+  }
+  if ((population === 100) !== Boolean(bundle.comparison)) {
+    throw new StoryConsistencyError("comparison population scope disagrees");
   }
 }
 

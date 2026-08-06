@@ -21,9 +21,8 @@ describe("native SVG charts", () => {
     const container = document.createElement("div");
     const story = loadFixture();
     const snapshots =
-      story.experiments.scenarios["braess-open"].qLearning.representative
-        .snapshots;
-    const handle = createLearningChart(container, snapshots, 80, 64.6875);
+      story.learning.scenarios["braess-open"].representative.snapshots;
+    const handle = createLearningChart(container, snapshots, 80, 64.688);
     const svg = container.querySelector("svg");
     expect(svg?.getAttribute("role")).toBe("img");
     expect(svg?.querySelector("title")?.textContent).toContain("Q-learning");

@@ -51,7 +51,6 @@ class Snapshot:
     episode: int
     epsilon: float
     route_counts: CountState
-    assignments: tuple[int, ...]
     edge_loads: dict[str, int]
     edge_physical_latencies: dict[str, float]
     route_physical_costs: tuple[float, ...]
@@ -71,7 +70,6 @@ class Snapshot:
             "episode": self.episode,
             "epsilon": self.epsilon,
             "routeCounts": list(self.route_counts),
-            "assignments": list(self.assignments),
             "edgeLoads": self.edge_loads,
             "edgePhysicalLatencies": self.edge_physical_latencies,
             "routePhysicalCosts": list(self.route_physical_costs),
@@ -110,7 +108,6 @@ def make_snapshot(
         episode=episode,
         epsilon=epsilon,
         route_counts=counts,
-        assignments=tuple(int(value) for value in actions),
         edge_loads=game.edge_loads(counts),
         edge_physical_latencies={key: float(value) for key, value in edge_latency.items()},
         route_physical_costs=tuple(float(physical[route]) for route in game.routes),
@@ -153,7 +150,6 @@ class LearningRun:
             "seed": self.seed,
             "trainingFinalRouteCounts": list(self.training_final_counts),
             "finalGreedyRouteCounts": list(self.final_greedy_counts),
-            "finalGreedyAssignments": list(self.final_greedy_actions),
             "physicalSocialCost": self.final_physical_social_cost,
             "averagePhysicalLatency": self.final_physical_social_cost / self.game.population,
             "exploitability": self.final_exploitability,
