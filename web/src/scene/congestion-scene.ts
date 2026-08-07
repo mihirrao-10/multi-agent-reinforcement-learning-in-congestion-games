@@ -1,8 +1,8 @@
 import * as THREE from "three";
 
 import type { NetworkPresentation } from "../data/story-schema";
-import { AgentParticles } from "./agent-particles";
 import { FlowEdge } from "./flow-edge";
+import { NODE_VISUALS } from "./materials";
 
 type EdgeId = "SU" | "UT" | "SV" | "VT" | "UV";
 
@@ -27,7 +27,6 @@ export class CongestionScene {
   readonly group = new THREE.Group();
   readonly curves: Record<EdgeId, THREE.CatmullRomCurve3>;
   private readonly edges: Record<EdgeId, FlowEdge>;
-  private readonly particles: AgentParticles;
   private readonly tollBands: THREE.Mesh[] = [];
   private snapshot: NetworkPresentation | null = null;
   private population = 100;
@@ -69,17 +68,15 @@ export class CongestionScene {
       ]),
     };
     this.edges = {
-      SU: new FlowEdge(this.curves.SU, "variable"),
-      UT: new FlowEdge(this.curves.UT, "constant"),
-      SV: new FlowEdge(this.curves.SV, "constant"),
-      VT: new FlowEdge(this.curves.VT, "variable"),
-      UV: new FlowEdge(this.curves.UV, "shortcut"),
+      SU: new FlowEdge(this.curves.SU, "variable", 0.07),
+      UT: new FlowEdge(this.curves.UT, "constant", 0.31),
+      SV: new FlowEdge(this.curves.SV, "constant", 0.58),
+      VT: new FlowEdge(this.curves.VT, "variable", 0.82),
+      UV: new FlowEdge(this.curves.UV, "shortcut", 0.44),
     };
-    Object.values(this.edges).forEach((edge) => this.group.add(edge.mesh));
+    Object.values(this.edges).forEach((edge) => this.group.add(edge.group));
     this.createNodes();
     this.createTollBands();
-    this.particles = new AgentParticles(this.curves);
-    this.group.add(this.particles.mesh);
   }
 
   setPresentation(
@@ -90,7 +87,6 @@ export class CongestionScene {
     this.snapshot = snapshot;
     this.population = population;
     this.waiting = waiting;
-    this.particles.setPresentation(snapshot, population, waiting);
     this.updateEdges();
   }
 
@@ -126,7 +122,9 @@ export class CongestionScene {
   }
 
   update(elapsedSeconds: number, reducedMotion: boolean): void {
-    this.particles.update(elapsedSeconds, reducedMotion);
+    Object.values(this.edges).forEach((edge) =>
+      edge.animate(elapsedSeconds, reducedMotion),
+    );
     if (!reducedMotion) {
       this.tollBands.forEach((band, index) => {
         band.rotation.z += 0.0007 * (index === 0 ? 1 : -1);
@@ -136,11 +134,12 @@ export class CongestionScene {
 
   dispose(): void {
     Object.values(this.edges).forEach((edge) => edge.dispose());
-    this.particles.dispose();
     this.group.traverse((object) => {
       if (
         object instanceof THREE.Mesh &&
-        !Object.values(this.edges).some((edge) => edge.mesh === object)
+        !Object.values(this.edges).some(
+          (edge) => edge.mesh === object || edge.glowMesh === object,
+        )
       ) {
         const mesh = object as THREE.Mesh<
           THREE.BufferGeometry,
@@ -172,33 +171,41 @@ export class CongestionScene {
   private createNodes(): void {
     for (const [identifier, position] of Object.entries(NODE_POSITIONS)) {
       const isEndpoint = identifier === "S" || identifier === "T";
+      const coreRadius = isEndpoint
+        ? NODE_VISUALS.endpointCoreRadius
+        : NODE_VISUALS.junctionCoreRadius;
       const node = new THREE.Mesh(
-        new THREE.SphereGeometry(isEndpoint ? 0.115 : 0.098, 28, 22),
-        new THREE.MeshStandardMaterial({
-          color: isEndpoint ? "#fff9e8" : "#ffe8b0",
-          emissive: isEndpoint ? "#ffb84d" : "#ff9b39",
-          emissiveIntensity: isEndpoint ? 2.6 : 2.15,
-          roughness: 0.26,
-          metalness: 0.02,
+        new THREE.SphereGeometry(coreRadius, 32, 24),
+        new THREE.MeshBasicMaterial({
+          color: NODE_VISUALS.coreColor,
+          toneMapped: false,
         }),
       );
       node.position.copy(position);
+      node.userData.nodeId = identifier;
+      node.userData.nodeCoreRadius = coreRadius;
       const halo = new THREE.Mesh(
-        new THREE.SphereGeometry(isEndpoint ? 0.205 : 0.175, 20, 14),
+        new THREE.SphereGeometry(coreRadius * NODE_VISUALS.haloScale, 24, 18),
         new THREE.MeshBasicMaterial({
-          color: isEndpoint ? "#ffb24b" : "#ff7a3d",
+          color: NODE_VISUALS.haloColor,
           transparent: true,
-          opacity: 0.1,
+          opacity: isEndpoint ? 0.12 : 0.1,
           depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          toneMapped: false,
         }),
       );
       halo.position.copy(position);
+      halo.userData.nodeHalo = identifier;
       this.group.add(node, halo);
-      if (isEndpoint) {
-        const light = new THREE.PointLight("#ff9d42", 0.32, 1.4, 2);
-        light.position.copy(position);
-        this.group.add(light);
-      }
+      const light = new THREE.PointLight(
+        "#ffffff",
+        isEndpoint ? 0.2 : 0.13,
+        1.1,
+        2,
+      );
+      light.position.copy(position);
+      this.group.add(light);
     }
   }
 

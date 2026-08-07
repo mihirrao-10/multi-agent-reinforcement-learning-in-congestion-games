@@ -38,6 +38,21 @@
       class="opening-screen"
       aria-labelledby="opening-title"
     >
+      <a
+        class="opening-repository-link"
+        href="https://github.com/mihirrao-10/multi-agent-reinforcement-learning-in-congestion-games"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Open Multi-Agent Reinforcement Learning in Congestion Games on GitHub"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            fill="currentColor"
+            d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18a10.96 10.96 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.83 1.19 3.09 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.06.79 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"
+          />
+        </svg>
+        <span>View GitHub repository</span>
+      </a>
       <h1 id="opening-title" class="principal-title">
         When Every Agent Finds the Shortcut
       </h1>
@@ -50,7 +65,7 @@
         role="status"
         aria-live="polite"
       >
-        Preparing the 100-agent experiment.
+        Preparing the 100,000-commuter experiment.
       </p>
     </section>
 
@@ -82,7 +97,7 @@
               <canvas
                 id="congestion-canvas"
                 tabindex="0"
-                aria-label="One hundred agents are waiting at source S and have not chosen routes."
+                aria-label="The network represents 100,000 commuters. Every road is at guide thickness, and no commuting day has been simulated."
               ></canvas>
               <div
                 id="projected-labels"
@@ -93,7 +108,8 @@
             </div>
 
             <figcaption id="scene-caption" class="scene-caption">
-              The agents are waiting at S. No one has chosen a route yet.
+              The highway network is ready. No commuting day has been simulated
+              yet.
             </figcaption>
 
             <dl
@@ -134,20 +150,23 @@
             >
               <li class="network-encoding">
                 <i class="legend-traffic"></i>
-                More beads and a slightly wider line mean more travelers.
+                Thin green flow means a smaller traffic share. Thick red flow
+                means a larger traffic share.
               </li>
               <li class="network-encoding">
                 <i class="legend-latency"></i>
-                Green and faster means lower travel time; red and slower means
-                higher travel time.
+                Color and thickness both increase monotonically with traffic
+                share; opacity strengthens with them.
               </li>
-              <li
-                id="cohort-legend-item"
-                class="network-encoding cohort-encoding"
-                hidden
-              >
-                <i class="legend-cohort"></i
-                ><span id="cohort-legend-text"></span>
+              <li class="network-encoding">
+                <i class="legend-direction"></i>
+                Broad moving light makes every road look like a continuous fluid
+                flow and shows travel direction.
+              </li>
+              <li class="network-encoding">
+                <i class="legend-shortcut"></i>
+                White sunlike nodes mark the four junctions. The central
+                shortcut has zero direct latency.
               </li>
               <li class="landscape-encoding">
                 <i class="legend-surface"></i> Height is the active potential
@@ -172,9 +191,13 @@
               role="group"
               aria-labelledby="population-label"
             >
-              <span id="population-label">Agents</span>
+              <span id="population-label">Commuters</span>
               <div class="population-options">
-                <button type="button" data-population="100" aria-pressed="true">
+                <button
+                  type="button"
+                  data-population="100"
+                  aria-pressed="false"
+                >
                   100
                 </button>
                 <button
@@ -191,6 +214,20 @@
                 >
                   10,000
                 </button>
+                <button
+                  type="button"
+                  data-population="100000"
+                  aria-pressed="true"
+                >
+                  100,000
+                </button>
+                <button
+                  type="button"
+                  data-population="1000000"
+                  aria-pressed="false"
+                >
+                  1,000,000
+                </button>
               </div>
               <span
                 id="population-loading"
@@ -203,8 +240,8 @@
             <p id="playback-status" class="sr-only" aria-live="polite"></p>
             <p id="chapter-status" class="sr-only" aria-live="polite"></p>
             <p id="scene-description" class="sr-only">
-              One hundred agents are waiting at source S. All five unused edges
-              are thin and green.
+              The network represents 100,000 commuters at source S. Every road
+              is at guide thickness, and no route profile has been applied.
             </p>
             <p class="sr-only">
               In Explore view, drag in the direction the network should move.
@@ -228,18 +265,35 @@
                 When Every Agent Finds the Shortcut
               </h1>
               <p class="hero-subtitle">
-                What happens when individually capable learners all discover the
-                same tempting incentive?
+                A repeated daily commute through one small highway network.
               </p>
               <p>
-                <span data-population-text>100</span> independent travelers are
-                waiting at source <i>S</i>. They have not chosen routes,
-                received rewards, or updated any values.
+                Every morning,
+                <span data-population-text>100,000</span> commuters enter a
+                small highway network at <i>S</i> and need to reach <i>T</i>,
+                their destination. <i>U</i> and <i>V</i> are junctions. Each
+                commuter chooses one complete route, experiences that day’s
+                travel time, and updates a private estimate of the route it
+                took.
               </p>
               <p>
-                One central link will cost nothing by itself. The question is
-                whether private learning can settle on a stable pattern that
-                raises everyone’s travel time.
+                They do not meet afterward or exchange travel times in this
+                experiment. Each learner sees only its own trip. They still
+                affect one another because a road becomes slower when more of
+                them choose it. The network, not communication, links their
+                rewards.
+              </p>
+              <p>
+                A new link from <i>U</i> to <i>V</i> costs nothing by itself. It
+                looks like an obvious improvement. This is the setting for
+                Braess’s paradox: adding an option can lead self-interested
+                travelers to a stable outcome in which everyone is slower.
+              </p>
+              <p>
+                With the shortcut closed, an even split gives every commuter a
+                90-minute trip. Once the shortcut is open, everyone using it is
+                a stable outcome with a 120-minute trip. The journey below shows
+                why private learning can find that worse incentive pattern.
               </p>
               <button class="primary-action" type="button" data-proceed-act="0">
                 Proceed
@@ -253,8 +307,8 @@
               <h2 class="principal-title">A route is an action</h2>
               <p>
                 An action is one complete choice available to a learner. Here,
-                that action is a route from source to destination, not a
-                separate turn at each junction.
+                that action is the commuter’s route from source to destination
+                for one simulated day, not a separate turn at each junction.
               </p>
               <p>
                 Upper follows <span class="route-token">S → U → T</span>, Lower
@@ -276,8 +330,9 @@
                 </button>
               </div>
               <p>
-                Each agent will select exactly one of these complete routes in
-                each round. No learning has started yet.
+                One simulated day is one episode. Each commuter selects exactly
+                one complete route for that day. No central planner assigns
+                routes, and no learning has started yet.
               </p>
               <button class="primary-action" type="button" data-proceed-act="1">
                 Proceed
@@ -295,6 +350,7 @@
                 either variable edge make that edge slower.
               </p>
               <p>
+                All physical latencies and route costs are measured in minutes.
                 If <i>x</i><sub>U</sub>, <i>x</i><sub>L</sub>, and <i>x</i
                 ><sub>Z</sub> are route counts, Shortcut users raise both
                 variable loads even though the central edge itself has zero
@@ -307,14 +363,16 @@
               >
                 <div data-math="\operatorname{load}_{SU}=x_U+x_Z"></div>
                 <div data-math="\operatorname{load}_{VT}=x_L+x_Z"></div>
-                <div data-math="J_U=40(x_U+x_Z)/N+45"></div>
-                <div data-math="J_L=45+40(x_L+x_Z)/N"></div>
-                <div data-math="J_Z=40(x_U+x_Z)/N+40(x_L+x_Z)/N"></div>
+                <div data-math="J_U=60(x_U+x_Z)/N+60"></div>
+                <div data-math="J_L=60+60(x_L+x_Z)/N"></div>
+                <div data-math="J_Z=60(x_U+x_Z)/N+60(x_L+x_Z)/N"></div>
               </div>
               <p>
                 Reward is negative perceived route cost. A shorter trip gives a
                 less negative, therefore higher, reward. The normal view uses
-                only two ideas: traffic amount, and travel time.
+                one consistent encoding: road width, color, and opacity all
+                increase with the share of commuters using an edge. Thin green
+                roads carry less traffic; thick red roads carry more.
               </p>
               <button class="primary-action" type="button" data-proceed-act="2">
                 Proceed
@@ -325,16 +383,18 @@
           <section class="chapter" id="q-learning" data-story-act="3" hidden>
             <div class="chapter-copy">
               <p class="chapter-number">III</p>
-              <h2 class="principal-title">Each agent learns alone</h2>
+              <h2 class="principal-title">Each commuter learns alone</h2>
               <p>
-                A Q value is one agent’s current estimate of a route’s reward.
-                Every agent owns a separate row, and updates only the route
-                selected in that episode.
+                A Q value is one commuter’s current estimate of a route’s
+                reward. Every commuter owns a separate row, experiences only the
+                route it selected, and updates only that route in the episode.
               </p>
               <p>
-                An episode is one round in which all
-                <span data-population-text>100</span> agents choose before any
-                reward is evaluated. This keeps the joint choice simultaneous.
+                An episode is one simulated commuting day in which all
+                <span data-population-text>100,000</span> commuters choose
+                before any reward is evaluated. Their choices are simultaneous.
+                They do not exchange travel times or observe everyone else’s
+                costs.
               </p>
               <div
                 class="equation-display"
@@ -349,11 +409,14 @@
               </p>
               <p>
                 The environment is nonstationary from one learner’s perspective
-                because the other agents are adapting too. Classic single-agent
-                convergence theory is not transferred unchanged.
+                because the other commuters are adapting too. Shared congestion
+                couples their private rewards even though the learners do not
+                communicate. Classic single-agent convergence theory is not
+                transferred unchanged.
               </p>
+              <p id="learning-study-note" class="caveat"></p>
               <button id="run-learning" class="primary-action" type="button">
-                Run learning with 100 agents
+                Run sampled learning path for 100,000 commuters
               </button>
               <button id="run-again" class="quiet-action" type="button" hidden>
                 Run again
@@ -388,8 +451,8 @@
               <h2 class="principal-title">The game has a hidden landscape</h2>
               <p>
                 A potential function assigns one height to every route-count
-                profile. A strict best response, one agent switching to a
-                cheaper route, moves downhill by exactly that agent’s cost
+                profile. A strict best response, one commuter switching to a
+                cheaper route, moves downhill by exactly that commuter’s cost
                 change.
               </p>
               <div
@@ -399,7 +462,8 @@
               <p>
                 The arrows show the direction of an asynchronous
                 strict-improvement sequence. The final point is stable because
-                no one-agent move lowers private cost.
+                no one-commuter move lowers private cost. The learners discover
+                the shortcut because it is privately attractive.
               </p>
               <p id="landscape-sampling-note" class="caveat"></p>
               <p class="caveat">
@@ -436,6 +500,15 @@
                 Exploitability is the largest amount by which one agent could
                 reduce its own route cost by switching alone.
               </p>
+              <p>
+                The displayed all-Shortcut profile
+                <span data-exact="open-equilibrium-counts"></span> is stable
+                even though its total delay is not minimal. It is one of
+                <span data-exact="open-equilibrium-total"></span> exact weak
+                pure equilibria for this finite population:
+                <span data-exact="open-equilibrium-set"></span>. No uniqueness
+                is claimed.
+              </p>
               <div
                 class="equation-display"
                 data-math="\epsilon(a)=\max_i\left[J_i(a)-\min_r J_i(r,a_{-i})\right]"
@@ -446,9 +519,11 @@
                   <dd data-exact="open-equilibrium-counts"></dd>
                   <dd>
                     average <span data-exact="open-equilibrium-average"></span>
+                    minutes
                   </dd>
                   <dd>
                     social cost <span data-exact="open-equilibrium-cost"></span>
+                    commuter-minutes
                   </dd>
                 </div>
                 <div>
@@ -456,9 +531,11 @@
                   <dd data-exact="open-optimum-counts"></dd>
                   <dd>
                     average <span data-exact="open-optimum-average"></span>
+                    minutes
                   </dd>
                   <dd>
                     social cost <span data-exact="open-optimum-cost"></span>
+                    commuter-minutes
                   </dd>
                 </div>
               </dl>
@@ -466,7 +543,10 @@
                 Price of Anarchy compares the worst equilibrium cost with the
                 optimum. Here it is
                 <span data-exact="open-poa-fraction"></span>, approximately
-                <span data-exact="open-poa-decimal"></span>.
+                <span data-exact="open-poa-decimal"></span>. Price of Stability
+                compares the best equilibrium with the optimum; here it is
+                <span data-exact="open-pos-fraction"></span>, approximately
+                <span data-exact="open-pos-decimal"></span>.
               </p>
               <button class="primary-action" type="button" data-proceed-act="5">
                 Proceed
@@ -483,7 +563,8 @@
               <p>
                 Closing the central shortcut removes one action. No traveler can
                 use that edge, so Upper and Lower carry all
-                <span data-population-text>100</span> agents.
+                <span data-population-text>100,000</span> commuters. Removing
+                the shortcut changes what every commuter can choose.
               </p>
               <div
                 class="before-after"
@@ -492,22 +573,23 @@
               >
                 <div>
                   <span>shortcut open</span>
-                  <strong data-exact="open-equilibrium-average"></strong>average
+                  <strong data-exact="open-equilibrium-average"></strong>minutes
+                  average
                 </div>
                 <div>
                   <span>shortcut removed</span>
                   <strong data-exact="closed-equilibrium-average"></strong
-                  >average
+                  >minutes average
                 </div>
               </div>
               <p>
                 The closed equilibrium is
                 <span data-exact="closed-equilibrium-counts"></span>, with
                 average latency
-                <span data-exact="closed-equilibrium-average"></span>. The
-                equilibrium average falls by 18.75 percent. This is a result for
-                this Braess instance, not a claim that removing roads generally
-                improves traffic.
+                <span data-exact="closed-equilibrium-average"></span> minutes.
+                Relative to the displayed all-Shortcut equilibrium, the average
+                falls by 25 percent. This is a result for this Braess instance,
+                not a claim that removing roads generally improves traffic.
               </p>
               <button class="primary-action" type="button" data-proceed-act="6">
                 Proceed
@@ -526,13 +608,14 @@
               </p>
               <div
                 class="equation-display"
-                data-math="\tau_N(x)=(x-1)[c_N(x)-c_N(x-1)]=40(x-1)/N"
+                data-math="\tau_N(x)=(x-1)[c_N(x)-c_N(x-1)]=60(x-1)/N"
               ></div>
               <p>
                 The toll changes reward and route incentives. It does not change
                 physical edge latency, and toll payments remain transfers
-                outside the travel-time objective. Edge color still represents
-                travel time, never payment.
+                outside the travel-time objective. Edge color and thickness
+                still represent traffic share, never payment. A toll changes
+                private cost without changing the physical road itself.
               </p>
               <div
                 class="equation-display"
@@ -573,10 +656,17 @@
                 the last iterate, the final profile, is a pure Nash equilibrium.
               </p>
               <p class="comparison-scope">
-                The comparison below is the fully replicated 100-agent study.
-                Larger presets have separately labeled deterministic scale runs
-                and are not assigned the same uncertainty.
+                The comparison below is the fully replicated 100-commuter study.
+                The 1,000 and 10,000 presets use one audited full-population
+                run. The 100,000 and 1,000,000 presets use one audited sampled
+                proxy and are not assigned the same uncertainty.
               </p>
+              <p
+                id="comparison-loading"
+                class="caveat"
+                role="status"
+                aria-live="polite"
+              ></p>
               <div id="scenario-chart" class="story-chart" tabindex="0"></div>
               <div id="learner-chart" class="story-chart" tabindex="0"></div>
               <div
@@ -587,15 +677,15 @@
               >
                 <table id="learner-table">
                   <caption>
-                    Exported representative results in the 100-agent tolled
+                    Exported representative results in the 100-commuter tolled
                     study
                   </caption>
                   <thead>
                     <tr>
                       <th>method</th>
                       <th>final profile</th>
-                      <th>social cost</th>
-                      <th>exploitability</th>
+                      <th>social cost (commuter-minutes)</th>
+                      <th>exploitability (minutes)</th>
                       <th>supported statement</th>
                     </tr>
                   </thead>
@@ -659,26 +749,36 @@
               </p>
               <h3>Population-normalized model</h3>
               <p>
-                The variable latency is <span data-math="c_N(x)=40x/N"></span>.
-                This preserves the same Braess structure at 100, 1,000, and
-                10,000 agents and recovers x/2 only when N = 80.
+                The variable latency is <span data-math="c_N(x)=60x/N"></span>
+                minutes. The two constant outer edges each take 60 minutes and
+                the central edge takes zero. This preserves the same Braess
+                structure at 100, 1,000, 10,000, 100,000, and 1,000,000
+                commuters. The roads encode traffic share, so normalized
+                populations can produce similar shapes even though exact
+                commuter counts differ by orders of magnitude.
               </p>
-              <h3>Exact analysis without 50 million states</h3>
+              <h3>Exact analysis without materializing count states</h3>
               <p>
                 Social cost and potential separate into two symmetric
-                discrete-convex functions of Upper and Lower counts. One linear
-                scan finds every integer minimizer. Small populations are
-                exhaustively enumerated in tests to verify the reduction,
+                discrete-convex functions of Upper and Lower counts. Exact
+                floor, ceiling, adjacent tie, and boundary candidates around the
+                proven minimizer are sufficient, even when the full open game
+                has 500,001,500,001 count states. Small and medium populations
+                are cross-checked against exhaustive or linear references,
                 including tied optima.
               </p>
               <h3>Independent vectorized learning</h3>
               <p>
-                NumPy stores one Q row per agent. All actions are selected
-                before rewards, only selected entries update, and epsilon-zero
-                evaluation uses an isolated random stream. The 100-agent study
-                uses 64 seeds. Each larger preset uses one audited scale run per
-                scenario with its episode schedule and seed count recorded in
-                the bundle.
+                NumPy stores one private Q row per simulated commuter. All
+                actions are selected before rewards, only selected entries
+                update, and epsilon-zero evaluation uses an isolated random
+                stream. The 100-commuter study uses 64 seeds. The 1,000 and
+                10,000 studies simulate every commuter. For 100,000 and
+                1,000,000, 10,000 independent learners estimate normalized route
+                shares; deterministic largest remainder converts each snapshot
+                to represented-population integer counts, and all displayed
+                costs are recomputed from those counts. Exact equilibrium and
+                optimum markers always use the full represented population.
               </p>
               <h3>Deterministic public data</h3>
               <p>
@@ -687,14 +787,16 @@
                 ordering and finite-number serialization make each manifest and
                 bundle byte reproducible. Wall-clock values are excluded.
               </p>
-              <h3>Sampled surfaces and weighted cohorts</h3>
+              <h3>Sampled surfaces and continuous road flow</h3>
               <p>
-                The 100-agent surface contains all 5,151 count states. Larger
+                The 100-commuter surface contains all 5,151 count states. Larger
                 surfaces use a fixed deterministic barycentric sample of the
                 same exact potential formula. Equilibrium and optimum markers
-                remain exact integer profiles. One bead represents one agent at
-                100; larger views cap visible beads and attach exact integer
-                weights by a largest-remainder allocation.
+                remain exact integer profiles. No individual commuter markers
+                are rendered. Tube thickness, hue, and opacity all increase
+                monotonically with edge traffic share, from thin green to thick
+                red. Broad longitudinal light gives the roads a fluid appearance
+                and shows travel direction.
               </p>
               <h3>Boundaries and limitations</h3>
               <ul>
@@ -703,8 +805,8 @@
                   traffic forecast.
                 </li>
                 <li>
-                  Particles explain route assignment and relative travel time,
-                  not microscopic traffic.
+                  The visual flow is an aggregate encoding, not a microscopic
+                  traffic simulation or an empirical transportation dataset.
                 </li>
                 <li>
                   Independent learners face a nonstationary environment, so no

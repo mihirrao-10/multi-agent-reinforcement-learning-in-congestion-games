@@ -11,8 +11,24 @@ export const populationSchema = z.union([
   z.literal(100),
   z.literal(1_000),
   z.literal(10_000),
+  z.literal(100_000),
+  z.literal(1_000_000),
 ]);
 export type Population = z.infer<typeof populationSchema>;
+
+export const learningStudyKindSchema = z.enum([
+  "full-population",
+  "sampled-population-proxy",
+]);
+export type LearningStudyKind = z.infer<typeof learningStudyKindSchema>;
+
+export const learningStudySchema = z.object({
+  learningStudyKind: learningStudyKindSchema,
+  representedPopulation: populationSchema,
+  simulatedLearners: z.number().int().positive().max(10_000),
+  samplingDescription: z.string().min(1),
+});
+export type LearningStudy = z.infer<typeof learningStudySchema>;
 
 const exactNumberSchema = z.object({
   numerator: z.number().int(),
@@ -142,6 +158,14 @@ const learnerBlockSchema = z.object({
     }),
   }),
   runtime: z.record(z.string(), z.unknown()),
+  routeShareScaling: z
+    .object({
+      method: z.string().min(1),
+      representedPopulation: populationSchema,
+      simulatedLearners: z.number().int().positive(),
+      costsRecomputedFromScaledIntegerCounts: z.literal(true),
+    })
+    .optional(),
 });
 export type LearnerBlock = z.infer<typeof learnerBlockSchema>;
 
@@ -187,9 +211,9 @@ const comparisonScenarioSchema = z.object({
 });
 
 export const manifestSchema = z.object({
-  schemaVersion: z.literal("2.0.0"),
+  schemaVersion: z.literal("3.0.0"),
   model: z.object({
-    identifier: z.literal("atomic-braess-population-normalized-v2"),
+    identifier: z.literal("atomic-braess-60-minute-v3"),
     nodes: z.array(
       z.object({
         id: z.enum(["S", "U", "V", "T"]),
@@ -227,7 +251,7 @@ export const manifestSchema = z.object({
       }),
     ),
   }),
-  defaultPopulation: z.literal(100),
+  defaultPopulation: z.literal(100_000),
   comparisonPopulation: z.literal(100),
   populations: z
     .array(
@@ -235,19 +259,23 @@ export const manifestSchema = z.object({
         agents: populationSchema,
         label: z.string(),
         bundle: z.string(),
-        visualBeadBudget: z.number().int().positive().max(200),
+        learningStudyKind: learningStudyKindSchema,
+        representedPopulation: populationSchema,
+        simulatedLearners: z.number().int().positive(),
+        samplingDescription: z.string().min(1),
         study: z.string(),
       }),
     )
-    .length(3),
+    .length(5),
   seedPolicy: z.record(z.string(), z.unknown()),
 });
 export type StoryManifest = z.infer<typeof manifestSchema>;
 
 export const populationBundleSchema = z.object({
-  schemaVersion: z.literal("2.0.0"),
-  modelIdentifier: z.literal("atomic-braess-population-normalized-v2"),
+  schemaVersion: z.literal("3.0.0"),
+  modelIdentifier: z.literal("atomic-braess-60-minute-v3"),
   population: populationSchema,
+  learningStudy: learningStudySchema,
   waitingState: z.object({
     kind: z.literal("preExperiment"),
     waitingCount: populationSchema,
@@ -274,6 +302,7 @@ export const populationBundleSchema = z.object({
     }),
   }),
   learning: z.object({
+    study: learningStudySchema,
     configuration: z.record(z.string(), z.unknown()),
     scenarios: z.object({
       "braess-open": learnerBlockSchema,
@@ -313,8 +342,13 @@ export const populationBundleSchema = z.object({
       rawStepCount: z.number().int().positive(),
       renderedPointCount: z.number().int().positive(),
       rawPathValidated: z.literal(true),
-      everyMoveIsOneAgent: z.literal(true),
+      pathPopulation: z.number().int().positive(),
+      representedPopulation: populationSchema,
+      scaledForDisplay: z.boolean(),
+      everyMoveIsOneAgent: z.boolean(),
+      everySimulatedMoveIsOneLearner: z.literal(true),
       strictlyDecreasingPotential: z.literal(true),
+      simulatedPotentialStrictlyDecreasing: z.literal(true),
       renderedDescription: z.string(),
     }),
   }),

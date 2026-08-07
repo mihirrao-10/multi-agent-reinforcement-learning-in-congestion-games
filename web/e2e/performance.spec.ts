@@ -12,10 +12,10 @@ interface PopulationTiming {
   loadMilliseconds: number;
   renderedFrames: number;
   sampleMilliseconds: number;
-  visibleBeads: number;
+  flowRendering: string | null;
 }
 
-test("population bundles lazy-load and bounded WebGL cohorts render at a stable cadence", async ({
+test("population bundles lazy-load and continuous WebGL flow renders at a stable cadence", async ({
   page,
 }, testInfo) => {
   test.setTimeout(60_000);
@@ -30,17 +30,20 @@ test("population bundles lazy-load and bounded WebGL cohorts render at a stable 
     performance.getEntriesByType("resource").map((entry) => entry.name),
   );
   expect(
-    initialResources.some((name) => name.includes("population-100-v2")),
+    initialResources.some((name) => name.includes("population-100-v3")),
+  ).toBe(false);
+  expect(
+    initialResources.some((name) => name.includes("population-1000-v3")),
+  ).toBe(false);
+  expect(
+    initialResources.some((name) => name.includes("population-10000-v3")),
+  ).toBe(false);
+  expect(
+    initialResources.some((name) => name.includes("population-100000-v3")),
   ).toBe(true);
-  expect(
-    initialResources.some((name) => name.includes("population-1000-v2")),
-  ).toBe(false);
-  expect(
-    initialResources.some((name) => name.includes("population-10000-v2")),
-  ).toBe(false);
 
   const timings: PopulationTiming[] = [];
-  for (const population of [100, 1_000, 10_000] as const) {
+  for (const population of [100, 1_000, 10_000, 100_000, 1_000_000] as const) {
     const loadStart = performance.now();
     await selectPopulation(page, population);
     const loadMilliseconds = performance.now() - loadStart;
@@ -54,22 +57,22 @@ test("population bundles lazy-load and bounded WebGL cohorts render at a stable 
     const finalFrame = Number(
       (await canvas.getAttribute("data-animation-frame")) ?? 0,
     );
-    const visibleBeads = Number(
-      (await page.locator("#stage").getAttribute("data-visible-beads")) ?? 0,
-    );
+    const stage = page.locator("#stage");
     timings.push({
       population,
       loadMilliseconds,
       renderedFrames: finalFrame - initialFrame,
       sampleMilliseconds,
-      visibleBeads,
+      flowRendering: await stage.getAttribute("data-flow-rendering"),
     });
   }
 
-  expect(timings.map((timing) => timing.visibleBeads)).toEqual([100, 180, 180]);
   for (const timing of timings) {
     expect(timing.loadMilliseconds).toBeLessThan(10_000);
-    expect(timing.renderedFrames).toBeGreaterThanOrEqual(24);
+    expect(
+      timing.renderedFrames / (timing.sampleMilliseconds / 1_000),
+    ).toBeGreaterThanOrEqual(15);
+    expect(timing.flowRendering).toBe("continuous-tubes");
   }
   testInfo.annotations.push({
     type: "browser-performance",

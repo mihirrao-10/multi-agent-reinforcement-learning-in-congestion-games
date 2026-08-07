@@ -37,7 +37,7 @@ The repository still checks the identity exhaustively on small populations so a 
 
 The recognizable Braess family has one source, one destination, two outer routes, and a central connection that combines their congestion-sensitive portions. Selfish use of the added link can make equilibrium travel worse. Price of Anarchy and Price of Stability compare equilibrium cost with optimum cost.
 
-The values `5000/4043`, `(0, 0, 100)`, and `(44, 44, 12)` are not literature constants. They are exact outputs of this authored normalized finite model.
+The values `4/3`, `(0, 0, 100)`, and `(50, 50, 0)` are not literature constants. They are exact outputs of this authored normalized finite model.
 
 ### Q-learning
 
@@ -49,14 +49,14 @@ Hedge is a full-information online-learning method. External regret compares rea
 
 ## Project-specific model choices
 
-- Supported populations `100`, `1,000`, and `10,000`.
+- Supported represented populations `100`, `1,000`, `10,000`, `100,000`, and `1,000,000`.
 - Labeled, atomic, unsplittable agents with complete-route actions.
-- Variable costs `40x/N`, constant costs 45, and a zero-cost central edge.
+- Variable costs `60x/N` minutes, constant costs 60 minutes, and a zero-cost central edge.
 - Route codes `U`, `L`, and `Z`.
 - Physical social cost as total physical latency.
-- Discrete toll `40(x - 1)/N` on the variable edges.
+- Discrete toll `60(x - 1)/N` minutes on the variable edges.
 - Scenarios `braess-open`, `braess-closed`, and `braess-tolled`.
-- An exact discrete-convex `O(N)` reduction for equilibrium and optimum.
+- An exact constant-size discrete-convex candidate reduction for equilibrium and optimum.
 
 These choices preserve the intended Braess structure as population changes. They can produce tied adjacent integer optima, so the implementation returns complete sets and avoids universal uniqueness language.
 
@@ -72,6 +72,8 @@ These choices preserve the intended Braess structure as population changes. They
 | Canonical best response | 16 update orders per scenario |
 | 1,000-agent Q scale study | 3,200 episodes, one seed per scenario |
 | 10,000-agent Q scale study | 2,400 episodes, one seed per scenario |
+| 100,000-agent sampled study | 10,000 learners, 2,400 episodes, one seed per scenario |
+| 1,000,000-agent sampled study | 10,000 learners, 2,400 episodes, one seed per scenario |
 | Hedge rate | `eta = 0.18` |
 | Base seed | `20260804` |
 | Representative | final-count medoid, exploitability, then seed |
@@ -83,9 +85,10 @@ All Q agents choose before rewards are computed and update selected entries only
 - A title-only Start screen and one-act-at-a-time guided journey.
 - A real waiting state with no fabricated episode or route metrics.
 - A shared Three.js network with top camera controls and bottom population controls.
-- One bead per agent at 100, and 180 deterministic weighted cohorts at scale.
-- Load encoded by bead density and slight radius change.
-- Physical latency encoded redundantly by green-to-red hue and traversal speed.
+- Continuous translucent directional tubes with no individual commuter symbols.
+- Traffic share encoded monotonically by nonlinear radius, hue, and opacity from thin green to thick red.
+- Broad moving light used only as a fluid-looking direction cue.
+- Four enlarged white cores and soft white halos for `S`, `U`, `V`, and `T`.
 - A complete 100-agent potential surface and deterministic fixed-resolution scale samples.
 - Exact markers, a validated strict-best-response path, and Q traces without downhill claims.
 - Native SVG charts, KaTeX, and a state-equivalent SVG network fallback.
@@ -95,9 +98,10 @@ Visual interpolation never creates a numerical claim. Textual values come from e
 
 ## Empirical observations, not theorems
 
-- The canonical open representative and all canonical open final greedy profiles reach all Shortcut.
-- The committed scale trajectories have distinct selected-population training endpoints.
-- Epsilon-zero greedy evaluations of the two public scale runs reach all Shortcut.
+- The finite-episode canonical 100-commuter representative remains mixed, while the exact all-Shortcut profile is separately identified as an equilibrium.
+- The committed 1,000- and 10,000-commuter full studies have distinct training endpoints.
+- The two largest displayed training paths are disclosed scaled summaries of one 10,000-learner proxy.
+- Epsilon-zero greedy evaluations reach all Shortcut for the 10,000-commuter study and the two sampled scale views; the 100 and 1,000 studies remain mixed at their declared episode budgets.
 - The canonical tolled representative is near an exact optimum but need not equal it in every run.
 - Low Hedge regret does not force every final profile to be a pure equilibrium.
 

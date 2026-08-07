@@ -18,7 +18,6 @@ import type {
 import { exactSnapshotAtIndex } from "../data/validation";
 import type { NetworkFallback } from "../fallback";
 import type { SceneController } from "../scene/scene-controller";
-import { cohortLegend, visibleBeadBudget } from "../scene/cohorts";
 import { ChapterObserver } from "./chapter-observer";
 import {
   conceptVisibility,
@@ -68,11 +67,12 @@ function scenarioForAct(act: number): ScenarioId {
 export class StoryController {
   private readonly manifest: StoryManifest;
   private bundle: PopulationBundle;
-  private readonly comparisonBundle: PopulationBundle;
+  private comparisonBundle: PopulationBundle | null = null;
+  private comparisonRequest: Promise<void> | null = null;
   private readonly scene: SceneController | null;
   private readonly fallback: NetworkFallback | null;
   private readonly observer: ChapterObserver;
-  private journey: JourneyState = initialJourneyState();
+  private journey: JourneyState;
   private visual: StoryState;
   private learningChart: LearningChartHandle | null = null;
   private animationFrame = 0;
@@ -120,14 +120,11 @@ export class StoryController {
   private readonly directionalPathLegend = requireElement<HTMLElement>(
     "#directional-path-legend",
   );
-  private readonly cohortItem = requireElement<HTMLElement>(
-    "#cohort-legend-item",
-  );
-  private readonly cohortText = requireElement<HTMLElement>(
-    "#cohort-legend-text",
-  );
   private readonly populationLoading = requireElement<HTMLElement>(
     "#population-loading",
+  );
+  private readonly learningStudyNote = requireElement<HTMLElement>(
+    "#learning-study-note",
   );
   private readonly runLearning =
     requireElement<HTMLButtonElement>("#run-learning");
@@ -141,7 +138,13 @@ export class StoryController {
   constructor(options: StoryControllerOptions) {
     this.manifest = options.manifest;
     this.bundle = options.bundle;
-    this.comparisonBundle = options.bundle;
+    this.journey = initialJourneyState(options.bundle.population);
+    if (
+      options.bundle.population === options.manifest.comparisonPopulation &&
+      options.bundle.comparison
+    ) {
+      this.comparisonBundle = options.bundle;
+    }
     this.scene = options.scene;
     this.fallback = options.fallback;
     this.visual = initialStoryState(
@@ -156,7 +159,6 @@ export class StoryController {
       this.activateAct(act),
     );
     this.populateBundleContent();
-    this.populateComparison();
     document.body.dataset.bundlePopulation = String(this.bundle.population);
     this.render();
     this.startButton.disabled = false;
@@ -227,6 +229,7 @@ export class StoryController {
       });
     }
     this.render(true);
+    if (act >= 8) void this.ensureComparison();
   }
 
   private proceed(fromAct: number): void {
@@ -271,7 +274,8 @@ export class StoryController {
     this.dispatchJourney({ type: "COMPLETE_LEARNING" });
     this.visual = reduceStoryState(this.visual, { type: "COMPLETE" });
     const snapshot = this.activeLearningSnapshot();
-    this.learningSummary.textContent = `The exported run finishes at ${profileText(snapshot.routeCounts)}, with average latency ${formatNumber(snapshot.averagePhysicalLatency)}.`;
+    this.learningSummary.textContent =
+      `The exported learning path finishes at ${profileText(snapshot.routeCounts)}, with average latency ${formatNumber(snapshot.averagePhysicalLatency)} minutes. ${this.studyDisclosure()}`.trim();
     this.playbackStatus.textContent = this.learningSummary.textContent;
     this.render();
   }
@@ -283,20 +287,25 @@ export class StoryController {
     )
       return;
     const request = ++this.populationRequest;
-    this.populationLoading.textContent = `Loading ${population.toLocaleString()}-agent data…`;
+    this.populationLoading.textContent = `Loading the ${population.toLocaleString()}-commuter study...`;
     this.setPopulationButtonsDisabled(true);
     try {
       const bundle = await loadPopulationBundle(population);
       if (request !== this.populationRequest) return;
       this.bundle = bundle;
+      if (
+        bundle.population === this.manifest.comparisonPopulation &&
+        bundle.comparison
+      ) {
+        this.comparisonBundle = bundle;
+      }
       this.scene?.setBundle(bundle);
       this.dispatchJourney({ type: "SELECT_POPULATION", population });
       this.visual = reduceStoryState(this.visual, {
         type: "SET_POPULATION",
         population,
       });
-      const targetAct =
-        this.journey.maxUnlockedAct >= 3 ? 3 : this.journey.activeAct;
+      const targetAct = this.journey.activeAct;
       this.dispatchJourney({ type: "SET_ACTIVE_ACT", act: targetAct });
       this.visual = reduceStoryState(this.visual, {
         type: "SET_CHAPTER",
@@ -306,7 +315,7 @@ export class StoryController {
       this.populateBundleContent();
       document.body.dataset.bundlePopulation = String(population);
       this.populationLoading.textContent = "";
-      this.playbackStatus.textContent = `${population.toLocaleString()} agents selected. Learning reset to the waiting state.`;
+      this.playbackStatus.textContent = `${population.toLocaleString()} commuters selected. ${this.studyDisclosure()} The current chapter is preserved.`;
       this.render();
       if (targetAct === 3) {
         requireElement<HTMLElement>("#q-learning").scrollIntoView({
@@ -401,6 +410,15 @@ export class StoryController {
       ? presentation.routeCounts.join(",")
       : "waiting";
     this.stage.dataset.population = String(this.bundle.population);
+    this.stage.dataset.flowRendering = "continuous-tubes";
+    this.stage.dataset.learningStudyKind =
+      this.bundle.learningStudy.learningStudyKind;
+    this.stage.dataset.representedPopulation = String(
+      this.bundle.learningStudy.representedPopulation,
+    );
+    this.stage.dataset.simulatedLearners = String(
+      this.bundle.learningStudy.simulatedLearners,
+    );
     this.stage.dataset.presentationState = presentation
       ? "snapshot"
       : "waiting";
@@ -411,9 +429,6 @@ export class StoryController {
     this.stage.dataset.surface = state.tollsActive
       ? "physical-social-cost"
       : "rosenthal-potential";
-    this.stage.dataset.visibleBeads = String(
-      visibleBeadBudget(this.bundle.population),
-    );
   }
 
   private renderControls(state: StoryState): void {
@@ -443,12 +458,6 @@ export class StoryController {
     this.directionalPathLegend.hidden = !(
       landscape && state.trajectory === "best-response"
     );
-    const cohortActive = this.bundle.population > 100 && !landscape;
-    this.cohortItem.hidden = !cohortActive;
-    this.cohortText.textContent = cohortLegend(
-      this.bundle.population,
-      visibleBeadBudget(this.bundle.population),
-    );
     const learningInProgress =
       this.journey.learningStarted && !this.journey.learningCompleted;
     this.contextualPlayback.hidden = !learningInProgress;
@@ -465,7 +474,9 @@ export class StoryController {
       '[data-proceed-act="3"]',
     );
     learningProceed.hidden = !this.journey.learningCompleted;
-    this.runLearning.textContent = `Run learning with ${this.bundle.population.toLocaleString()} agents`;
+    this.runLearning.textContent = this.isSampledStudy()
+      ? `Run sampled learning path for ${this.bundle.population.toLocaleString()} commuters`
+      : `Run learning with ${this.bundle.population.toLocaleString()} commuters`;
     document
       .querySelectorAll<HTMLButtonElement>("button[data-population]")
       .forEach((button) =>
@@ -509,18 +520,19 @@ export class StoryController {
     this.routeMetric.textContent = padded
       .map((count) => count.toLocaleString())
       .join(" / ");
-    this.latencyMetric.textContent = formatNumber(
+    this.latencyMetric.textContent = `${formatNumber(
       presentation.averagePhysicalLatency,
-    );
-    this.exploitabilityMetric.textContent = formatNumber(
+    )} minutes`;
+    this.exploitabilityMetric.textContent = `${formatNumber(
       presentation.exploitability,
-    );
+    )} minutes`;
   }
 
   private renderCaption(presentation: NetworkPresentation | null): void {
     if (!presentation) {
-      this.caption.textContent = `All ${this.bundle.population.toLocaleString()} agents are waiting at S. No one has chosen a route yet.`;
-      this.description.textContent = `${this.bundle.population.toLocaleString()} agents wait at source S. All five unused edges are thin and green. No episode or route metric exists yet.`;
+      this.caption.textContent =
+        "The highway network is ready. No commuting day has been simulated yet.";
+      this.description.textContent = `${this.bundle.population.toLocaleString()} commuters are represented at source S. Every road is at guide thickness, no route profile has been applied, and no episode or route metric exists yet. Road width, color, and opacity will show traffic share, while moving light will show direction.`;
     } else if (this.visual.sceneMode === "landscape") {
       const sampled =
         this.bundle.potentialLandscape.sampling.mode !==
@@ -530,20 +542,20 @@ export class StoryController {
         : this.visual.trajectory === "best-response"
           ? `${sampled ? "A sampled view of" : ""} Rosenthal potential. The arrows point toward decreasing potential.`
           : `${sampled ? "A sampled view of" : ""} Rosenthal potential. The pale Q-learning trace is not monotone.`;
-      this.description.textContent = `Potential landscape for ${this.bundle.population.toLocaleString()} agents. Active exact profile ${profileText(presentation.routeCounts)}. ${this.bundle.potentialLandscape.sampling.statement}`;
+      this.description.textContent = `Potential landscape for ${this.bundle.population.toLocaleString()} commuters. Active exact profile ${profileText(presentation.routeCounts)}. ${this.bundle.potentialLandscape.sampling.statement} ${this.studyDisclosure()}`;
     } else if (!this.visual.shortcutOpen) {
-      this.caption.textContent = `The shortcut is unavailable. Upper and Lower split all ${this.bundle.population.toLocaleString()} agents at equilibrium.`;
-      this.description.textContent = `Shortcut removed. Exact equilibrium route counts ${presentation.routeCounts.join(", ")}, average latency ${formatNumber(presentation.averagePhysicalLatency)}.`;
+      this.caption.textContent = `The shortcut is unavailable. Upper and Lower split all ${this.bundle.population.toLocaleString()} commuters at equilibrium.`;
+      this.description.textContent = `Shortcut removed. Exact equilibrium route counts ${presentation.routeCounts.join(", ")}, average latency ${formatNumber(presentation.averagePhysicalLatency)} minutes. Thicker and redder flow carries a larger traffic share.`;
     } else if (this.visual.tollsActive) {
-      this.caption.textContent = `The shortcut is restored. Toll rings change perceived cost, while edge color still shows travel time.`;
-      this.description.textContent = `Marginal-cost tolls active. Exact equilibrium ${profileText(presentation.routeCounts)}, physical average latency ${formatNumber(presentation.averagePhysicalLatency)}.`;
+      this.caption.textContent = `The shortcut is restored. Toll rings change private cost, while road color and thickness still show traffic share.`;
+      this.description.textContent = `Marginal-cost tolls active for ${this.bundle.population.toLocaleString()} commuters. Exact equilibrium ${profileText(presentation.routeCounts)}, physical average latency ${formatNumber(presentation.averagePhysicalLatency)} minutes. Continuous light moves from each road's source toward its target.`;
     } else {
       const episode =
         "episode" in presentation
           ? ` Episode ${presentation.episode.toLocaleString()}.`
           : "";
-      this.caption.textContent = `Learning uses an exported ${this.bundle.population.toLocaleString()}-agent trajectory.${episode}`;
-      this.description.textContent = `Shortcut open. Route counts ${presentation.routeCounts.join(", ")}; average physical latency ${formatNumber(presentation.averagePhysicalLatency)}.${episode}`;
+      this.caption.textContent = `${this.isSampledStudy() ? "Learning path estimated from 10,000 independently simulated commuters" : `Learning uses an exported full-population path for ${this.bundle.population.toLocaleString()} commuters`}.${episode}`;
+      this.description.textContent = `The network represents ${this.bundle.population.toLocaleString()} commuters. Shortcut open. Route counts ${presentation.routeCounts.join(", ")}; average physical latency ${formatNumber(presentation.averagePhysicalLatency)} minutes.${episode} Thin green flow means a smaller traffic share, thick red flow means a larger traffic share, and broad moving light shows direction. The central shortcut has zero direct latency. ${this.studyDisclosure()}`;
     }
     this.canvas.setAttribute("aria-label", this.description.textContent);
   }
@@ -569,6 +581,10 @@ export class StoryController {
       "open-equilibrium-counts": profileText(
         open.pureNashEquilibria[0]!.routeCounts,
       ),
+      "open-equilibrium-set": open.pureNashEquilibria
+        .map((profile) => profileText(profile.routeCounts))
+        .join(", "),
+      "open-equilibrium-total": String(open.pureNashEquilibria.length),
       "open-equilibrium-average": formatNumber(
         open.pureNashEquilibria[0]!.averagePhysicalLatency.decimal,
       ),
@@ -584,6 +600,8 @@ export class StoryController {
       ),
       "open-poa-fraction": open.priceOfAnarchy.fraction,
       "open-poa-decimal": formatNumber(open.priceOfAnarchy.decimal),
+      "open-pos-fraction": open.priceOfStability.fraction,
+      "open-pos-decimal": formatNumber(open.priceOfStability.decimal),
       "closed-equilibrium-counts": profileText(
         closed.pureNashEquilibria[0]!.routeCounts,
       ),
@@ -610,6 +628,7 @@ export class StoryController {
       });
     requireElement<HTMLElement>("#landscape-sampling-note").textContent =
       this.bundle.potentialLandscape.sampling.statement;
+    this.learningStudyNote.textContent = this.studyDisclosure();
     this.rebuildPopulationCharts();
   }
 
@@ -627,9 +646,9 @@ export class StoryController {
   }
 
   private populateComparison(): void {
+    if (!this.comparisonBundle?.comparison) return;
     createLearnerChart(requireElement("#learner-chart"), this.comparisonBundle);
     const comparison = this.comparisonBundle.comparison;
-    if (!comparison) return;
     const block = comparison.scenarios["braess-tolled"];
     const rows: [string, FinalSummary, string][] = [
       [
@@ -657,8 +676,8 @@ export class StoryController {
         [
           name,
           profileText(summary.finalGreedyRouteCounts),
-          formatNumber(summary.physicalSocialCost),
-          formatNumber(summary.exploitability),
+          `${formatNumber(summary.physicalSocialCost)} commuter-minutes`,
+          `${formatNumber(summary.exploitability)} minutes`,
           statement,
         ].forEach((value) => {
           const cell = document.createElement("td");
@@ -668,6 +687,50 @@ export class StoryController {
         return row;
       }),
     );
+  }
+
+  private ensureComparison(): Promise<void> {
+    if (this.comparisonBundle?.comparison) {
+      this.populateComparison();
+      return Promise.resolve();
+    }
+    if (this.comparisonRequest) return this.comparisonRequest;
+    const status = requireElement<HTMLElement>("#comparison-loading");
+    status.textContent = "Loading the replicated 100-commuter comparison...";
+    this.comparisonRequest = loadPopulationBundle(
+      this.manifest.comparisonPopulation,
+    )
+      .then((bundle) => {
+        if (!bundle.comparison) {
+          throw new Error("the canonical comparison data is missing");
+        }
+        this.comparisonBundle = bundle;
+        this.populateComparison();
+        status.textContent = "";
+      })
+      .catch((error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : "unknown data error";
+        status.textContent = `Could not load the comparison: ${message}`;
+      })
+      .finally(() => {
+        this.comparisonRequest = null;
+      });
+    return this.comparisonRequest;
+  }
+
+  private isSampledStudy(): boolean {
+    return (
+      this.bundle.learningStudy.learningStudyKind === "sampled-population-proxy"
+    );
+  }
+
+  private studyDisclosure(): string {
+    const study = this.bundle.learningStudy;
+    if (!this.isSampledStudy()) {
+      return `This is a full-population study with ${study.simulatedLearners.toLocaleString()} separate independent Q-learners.`;
+    }
+    return `Learning path estimated from ${study.simulatedLearners.toLocaleString()} independently simulated commuters; exact markers use the full population of ${study.representedPopulation.toLocaleString()}.`;
   }
 
   private bindControls(): void {
@@ -732,7 +795,9 @@ export class StoryController {
           if (
             population === 100 ||
             population === 1_000 ||
-            population === 10_000
+            population === 10_000 ||
+            population === 100_000 ||
+            population === 1_000_000
           ) {
             void this.selectPopulation(population);
           }
@@ -779,8 +844,11 @@ export class StoryController {
     );
     this.bundle = defaultBundle;
     this.scene?.setBundle(defaultBundle);
-    this.journey = reduceJourneyState(this.journey, { type: "FULL_RESET" });
-    this.visual = initialStoryState(this.visual.reducedMotion, 100);
+    this.journey = initialJourneyState(defaultBundle.population);
+    this.visual = initialStoryState(
+      this.visual.reducedMotion,
+      defaultBundle.population,
+    );
     document
       .querySelectorAll<HTMLElement>(".chapter[data-story-act]")
       .forEach((chapter) => {
@@ -800,7 +868,7 @@ export class StoryController {
     this.opening.hidden = false;
     document.body.classList.add("journey-locked");
     document.body.dataset.journeyStarted = "false";
-    document.body.dataset.bundlePopulation = "100";
+    document.body.dataset.bundlePopulation = String(defaultBundle.population);
     this.clearHash();
     window.scrollTo({ top: 0, behavior: "auto" });
     this.render();

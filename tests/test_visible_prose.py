@@ -3,9 +3,13 @@ from pathlib import Path
 
 def test_visible_sources_have_no_banned_prose() -> None:
     root = Path(__file__).parents[1]
-    extensions = {".html", ".ts", ".md", ".json"}
+    extensions = {".css", ".html", ".json", ".md", ".mjs", ".py", ".ts", ".yaml", ".yml"}
     excluded = {
         "node_modules",
+        ".venv",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
         "dist",
         "build",
         "congestion_marl.egg-info",
@@ -19,15 +23,23 @@ def test_visible_sources_have_no_banned_prose() -> None:
         text = path.read_text(encoding="utf-8")
         for banned in (
             "\u2014",
-            "Lorem ipsum",
-            "Loading exported value",
-            "Eighty independent",
-            "80 labeled",
-            "80 agents",
-            "80-agent",
-            "3^80",
-            "story-v1.json",
-            "schema 1.0.0",
+            "Lorem " + "ipsum",
+            "Loading exported " + "value",
+            "Eighty " + "independent",
+            "80 " + "labeled",
+            "80 " + "agents",
+            "80-" + "agent",
+            "3^" + "80",
+            "story-" + "v1.json",
+            "schema " + "1.0.0",
+            "be" + "ad",
+            "visual " + "cohort",
+            "cohort " + "legend",
+            "manifest-" + "v2",
+            "normalized-" + "v2",
+            "agent-" + "part" + "icles",
+            "cohorts" + ".ts",
+            "part" + "icle",
         ):
             if banned in text:
                 offenders.append(f"{path.relative_to(root)} contains {banned!r}")

@@ -9,21 +9,21 @@ from congestion_marl.types import Route, Scenario
 
 def test_open_route_loads_costs_and_social_cost() -> None:
     game = BraessGame(Scenario.OPEN)
-    state = (44, 44, 12)
-    assert game.edge_loads(state) == {"SU": 56, "UT": 44, "SV": 44, "VT": 56, "UV": 12}
+    state = (50, 50, 0)
+    assert game.edge_loads(state) == {"SU": 50, "UT": 50, "SV": 50, "VT": 50, "UV": 0}
     assert game.route_physical_costs(state) == {
-        Route.UPPER: Fraction(337, 5),
-        Route.LOWER: Fraction(337, 5),
-        Route.SHORTCUT: Fraction(224, 5),
+        Route.UPPER: Fraction(90),
+        Route.LOWER: Fraction(90),
+        Route.SHORTCUT: Fraction(60),
     }
-    assert game.social_cost(state) == Fraction(32344, 5)
+    assert game.social_cost(state) == Fraction(9000)
     assert game.total_toll_payment(state) == 0
 
 
 def test_assignments_and_counts_round_trip() -> None:
-    assignments = assignments_from_counts((44, 44, 12), Scenario.OPEN)
+    assignments = assignments_from_counts((50, 50, 0), Scenario.OPEN)
     assert len(assignments) == 100
-    assert counts_from_assignments(assignments, Scenario.OPEN, 100) == (44, 44, 12)
+    assert counts_from_assignments(assignments, Scenario.OPEN, 100) == (50, 50, 0)
 
 
 def test_route_count_validation() -> None:

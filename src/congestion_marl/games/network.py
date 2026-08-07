@@ -30,10 +30,10 @@ NODES = (
 )
 
 EDGES = (
-    Edge("SU", "S", "U", "40 load / N"),
-    Edge("UT", "U", "T", "45"),
-    Edge("SV", "S", "V", "45"),
-    Edge("VT", "V", "T", "40 load / N"),
+    Edge("SU", "S", "U", "60 load / N minutes"),
+    Edge("UT", "U", "T", "60 minutes"),
+    Edge("SV", "S", "V", "60 minutes"),
+    Edge("VT", "V", "T", "60 load / N minutes"),
     Edge("UV", "U", "V", "0"),
 )
 

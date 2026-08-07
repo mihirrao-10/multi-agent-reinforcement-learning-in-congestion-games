@@ -7,10 +7,19 @@ describe("story schema", () => {
   it("accepts the complete committed authoritative bundle", () => {
     const manifest = loadManifestFixture();
     const story = loadFixture();
-    expect(story.schemaVersion).toBe("2.0.0");
+    expect(story.schemaVersion).toBe("3.0.0");
     expect(story.population).toBe(100);
     expect(manifest.populations.map((entry) => entry.agents)).toEqual([
-      100, 1_000, 10_000,
+      100, 1_000, 10_000, 100_000, 1_000_000,
+    ]);
+    expect(
+      manifest.populations.map((entry) => entry.learningStudyKind),
+    ).toEqual([
+      "full-population",
+      "full-population",
+      "full-population",
+      "sampled-population-proxy",
+      "sampled-population-proxy",
     ]);
   });
 

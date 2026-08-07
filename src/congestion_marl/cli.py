@@ -18,6 +18,7 @@ from congestion_marl.config import (
     QLearningConfig,
 )
 from congestion_marl.export.json_writer import write_deterministic_json
+from congestion_marl.export.schema import SCHEMA_VERSION
 from congestion_marl.export.story import export_population_data
 from congestion_marl.export.validation import (
     StoryValidationError,
@@ -135,7 +136,7 @@ def _export(args: argparse.Namespace) -> int:
     sizes = ", ".join(
         f"{population:,}: {path.stat().st_size:,} bytes" for population, path in paths.items()
     )
-    print(f"wrote validated schema 2.0.0 population data to {output} ({sizes})")
+    print(f"wrote validated schema {SCHEMA_VERSION} population data to {output} ({sizes})")
     return 0
 
 
@@ -149,7 +150,7 @@ def _validate(args: argparse.Namespace) -> int:
             vertex_count = len(cast(list[object], landscape["vertices"]))
             descriptions.append(f"{population:,} agents: {vertex_count:,} vertices")
         description = ", ".join(descriptions)
-        print(f"valid population-aware schema 2.0.0 ({description})")
+        print(f"valid population-aware schema {SCHEMA_VERSION} ({description})")
     else:
         payload = validate_story_file(args.path)
         landscape = cast(dict[str, object], payload["potentialLandscape"])

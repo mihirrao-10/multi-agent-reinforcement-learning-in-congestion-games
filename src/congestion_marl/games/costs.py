@@ -6,11 +6,11 @@ from congestion_marl.config import POPULATION
 
 
 def variable_latency(load: int, population: int = POPULATION) -> Fraction:
-    """Return c_N(x) = 40x/N for a nonnegative integer edge load."""
+    """Return c_N(x) = 60x/N minutes for a nonnegative integer edge load."""
 
     if load < 0 or population <= 0:
         raise ValueError("edge load must be nonnegative and population positive")
-    return Fraction(40 * load, population)
+    return Fraction(60 * load, population)
 
 
 def constant_latency(load: int) -> Fraction:
@@ -18,7 +18,7 @@ def constant_latency(load: int) -> Fraction:
 
     if load < 0:
         raise ValueError("edge load cannot be negative")
-    return Fraction(45)
+    return Fraction(60)
 
 
 def zero_latency(load: int) -> Fraction:
@@ -30,11 +30,11 @@ def zero_latency(load: int) -> Fraction:
 
 
 def marginal_externality_toll(load: int, population: int = POPULATION) -> Fraction:
-    """Return tau_N(x) = 40(x - 1)/N, with zero toll at zero load."""
+    """Return tau_N(x) = 60(x - 1)/N, with zero toll at zero load."""
 
     if load < 0 or population <= 0:
         raise ValueError("edge load must be nonnegative and population positive")
-    return Fraction(40 * max(load - 1, 0), population)
+    return Fraction(60 * max(load - 1, 0), population)
 
 
 def perceived_variable_cost(load: int, population: int = POPULATION) -> Fraction:

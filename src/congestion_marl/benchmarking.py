@@ -64,10 +64,10 @@ def benchmark_suite(bundle_directory: Path | None = None) -> dict[str, object]:
     quick_story = build_story(quick_story_config)
     data_directory = bundle_directory or Path("web/public/data")
     bundle_paths = (
-        data_directory / "manifest-v2.json",
+        data_directory / "manifest-v3.json",
         *(
-            data_directory / f"population-{population}-v2.json"
-            for population in (100, 1_000, 10_000)
+            data_directory / f"population-{population}-v3.json"
+            for population in (100, 1_000, 10_000, 100_000, 1_000_000)
         ),
     )
 
@@ -107,6 +107,12 @@ def benchmark_suite(bundle_directory: Path | None = None) -> dict[str, object]:
             "exactOpenAnalysis1000Agents": _measure(lambda: analyze_scenario(Scenario.OPEN, 1_000)),
             "exactOpenAnalysis10000Agents": _measure(
                 lambda: analyze_scenario(Scenario.OPEN, 10_000)
+            ),
+            "exactOpenAnalysis100000Agents": _measure(
+                lambda: analyze_scenario(Scenario.OPEN, 100_000)
+            ),
+            "exactOpenAnalysis1000000Agents": _measure(
+                lambda: analyze_scenario(Scenario.OPEN, 1_000_000)
             ),
             "qLearning100Agents500EpisodesOneSeed": _measure(
                 lambda: run_independent_q(default_game, default_q_config, 20260804)

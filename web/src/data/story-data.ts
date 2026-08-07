@@ -27,7 +27,7 @@ async function fetchValidated<T>(
 
 export async function loadManifest(): Promise<StoryManifest> {
   if (cachedManifest) return cachedManifest;
-  cachedManifest = await fetchValidated("manifest-v2.json", (payload) => {
+  cachedManifest = await fetchValidated("manifest-v3.json", (payload) => {
     const result = manifestSchema.safeParse(payload);
     if (!result.success) {
       throw new Error(

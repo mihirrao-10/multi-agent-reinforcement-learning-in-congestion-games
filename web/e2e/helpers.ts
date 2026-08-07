@@ -36,7 +36,11 @@ export async function proceedFrom(page: Page, act: number): Promise<void> {
 
 export async function runLearningToCompletion(page: Page): Promise<void> {
   const stage = page.locator("#stage");
-  await page.getByRole("button", { name: /^Run learning with/ }).click();
+  await page
+    .getByRole("button", {
+      name: /^Run (?:learning with|sampled learning path for)/,
+    })
+    .click();
   await expect(stage).toHaveAttribute("data-learning-state", "playing");
   await expect
     .poll(async () => Number(await stage.getAttribute("data-episode")), {
@@ -69,7 +73,7 @@ export async function unlockThrough(
 
 export async function selectPopulation(
   page: Page,
-  population: 100 | 1_000 | 10_000,
+  population: 100 | 1_000 | 10_000 | 100_000 | 1_000_000,
 ): Promise<void> {
   await page.locator(`button[data-population="${population}"]`).click();
   await expect(page.locator("body")).toHaveAttribute(

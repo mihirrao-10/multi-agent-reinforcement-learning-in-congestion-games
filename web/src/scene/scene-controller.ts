@@ -7,6 +7,12 @@ import type {
 import type { FocusTarget, StoryState } from "../story/state-machine";
 import { cameraPoseForChapter } from "./camera-poses";
 import { CongestionScene, NODE_POSITIONS } from "./congestion-scene";
+import {
+  NODE_VISUALS,
+  edgeColorHex,
+  edgeRadius,
+  type EdgeRole,
+} from "./materials";
 import { OrbitController } from "./orbit-controller";
 import { PotentialLandscape } from "./potential-landscape";
 import { ProjectedLabels } from "./projected-labels";
@@ -77,7 +83,7 @@ export class SceneController {
     for (const [label, position] of Object.entries(NODE_POSITIONS)) {
       this.labels.add(
         label,
-        position.clone().add(new THREE.Vector3(0, 0.17, 0)),
+        position.clone().add(new THREE.Vector3(0, 0.215, 0)),
         "network",
       );
     }
@@ -187,6 +193,42 @@ export class SceneController {
       ? snapshot.routeCounts.join(",")
       : "waiting";
     this.canvas.dataset.population = String(state.population);
+    this.canvas.dataset.flowRendering = "continuous-tubes";
+    this.canvas.dataset.learningStudyKind =
+      this.bundle.learningStudy.learningStudyKind;
+    this.canvas.dataset.representedPopulation = String(
+      this.bundle.learningStudy.representedPopulation,
+    );
+    this.canvas.dataset.simulatedLearners = String(
+      this.bundle.learningStudy.simulatedLearners,
+    );
+    this.canvas.dataset.nodeCoreColor = NODE_VISUALS.coreColor;
+    this.canvas.dataset.endpointNodeRadius = String(
+      NODE_VISUALS.endpointCoreRadius,
+    );
+    this.canvas.dataset.junctionNodeRadius = String(
+      NODE_VISUALS.junctionCoreRadius,
+    );
+    const edgeRoles = {
+      SU: "variable",
+      UT: "constant",
+      SV: "constant",
+      VT: "variable",
+      UV: "shortcut",
+    } as const satisfies Record<string, EdgeRole>;
+    for (const [edge, role] of Object.entries(edgeRoles)) {
+      const load = state.waiting ? 0 : (snapshot?.edgeLoads[edge] ?? 0);
+      const suffix = `${edge[0]}${edge.slice(1).toLowerCase()}`;
+      this.canvas.dataset[`edgeRadius${suffix}`] = edgeRadius(
+        load,
+        state.population,
+      ).toFixed(5);
+      this.canvas.dataset[`edgeColor${suffix}`] = edgeColorHex(
+        role,
+        load,
+        state.population,
+      );
+    }
     this.canvas.dataset.presentationState = state.waiting
       ? "waiting"
       : "snapshot";
@@ -337,6 +379,13 @@ export class SceneController {
         ? renderable.material
         : [renderable.material];
       for (const material of materials) {
+        if (
+          material instanceof THREE.ShaderMaterial &&
+          material.uniforms.uSceneOpacity
+        ) {
+          material.uniforms.uSceneOpacity.value = weight;
+          continue;
+        }
         if (material.userData.baseOpacity === undefined) {
           material.userData.baseOpacity = material.opacity;
         }

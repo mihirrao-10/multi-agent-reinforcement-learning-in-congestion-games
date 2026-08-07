@@ -31,6 +31,11 @@ test("the progressive journey is keyboard-operable and semantically quiet while 
   const errors = watchRuntimeErrors(page);
   await openTitle(page);
   await page.keyboard.press("Tab");
+  const repositoryLink = page.getByRole("link", {
+    name: "Open Multi-Agent Reinforcement Learning in Congestion Games on GitHub",
+  });
+  await expect(repositoryLink).toBeFocused();
+  await page.keyboard.press("Tab");
   const start = page.getByRole("button", { name: "Start", exact: true });
   await expect(start).toBeFocused();
   expect(
@@ -46,7 +51,7 @@ test("the progressive journey is keyboard-operable and semantically quiet while 
   ).toHaveCount(0);
   await expect(page.locator("#congestion-canvas")).toHaveAttribute(
     "aria-label",
-    /100 agents wait at source S/,
+    /100,000 commuters are represented at source S/,
   );
 
   await page.locator('[data-proceed-act="0"]').focus();
@@ -63,7 +68,9 @@ test("the progressive journey is keyboard-operable and semantically quiet while 
   await proceedFrom(page, 1);
   await proceedFrom(page, 2);
   await page
-    .getByRole("button", { name: "Run learning with 100 agents" })
+    .getByRole("button", {
+      name: "Run sampled learning path for 100,000 commuters",
+    })
     .focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("#stage")).toHaveAttribute(
@@ -93,7 +100,7 @@ test("population changes announce the reset and expose readable control names", 
     "1000",
   );
   await expect(page.locator("#playback-status")).toContainText(
-    "1,000 agents selected. Learning reset to the waiting state.",
+    "1,000 commuters selected.",
   );
   await expect(page.locator('button[data-population="1000"]')).toHaveAttribute(
     "aria-pressed",
@@ -103,7 +110,7 @@ test("population changes announce the reset and expose readable control names", 
     page.getByRole("button", { name: "Explore view" }),
   ).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#scene-description")).toContainText(
-    "1,000 agents wait at source S",
+    "1,000 commuters are represented at source S",
   );
 });
 

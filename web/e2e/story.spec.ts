@@ -17,7 +17,15 @@ test("fresh load is an exact, non-bypassable title screen", async ({
   const errors = watchRuntimeErrors(page);
   await openTitle(page);
   await expect(page.locator("#opening-screen")).toBeVisible();
-  await expect(page.locator("#opening-screen > :visible")).toHaveCount(2);
+  await expect(page.locator("#opening-screen > :visible")).toHaveCount(3);
+  await expect(
+    page.getByRole("link", {
+      name: "Open Multi-Agent Reinforcement Learning in Congestion Games on GitHub",
+    }),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/mihirrao-10/multi-agent-reinforcement-learning-in-congestion-games",
+  );
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "When Every Agent Finds the Shortcut",
   );
@@ -64,7 +72,13 @@ test("Start reveals a waiting network and concepts unlock one act at a time", as
   await expect(
     page.locator(".chapter[data-story-act]:not([hidden])"),
   ).toHaveCount(1);
-  await expect(page.locator("#scene-caption")).toContainText("waiting at S");
+  await expect(page.locator("#scene-caption")).toHaveText(
+    "The highway network is ready. No commuting day has been simulated yet.",
+  );
+  await expect(stage).toHaveAttribute(
+    "data-flow-rendering",
+    "continuous-tubes",
+  );
 
   const placement = await page.evaluate(() => {
     const camera = document
@@ -115,20 +129,24 @@ test("Start reveals a waiting network and concepts unlock one act at a time", as
   await expect(page.locator("#network-legend")).toBeVisible();
   await expect(
     page.locator("#network-legend .network-encoding:visible"),
-  ).toHaveCount(2);
+  ).toHaveCount(4);
   await expect(page.locator("#stage-metrics")).toBeHidden();
   await page.screenshot({ path: "e2e/screenshots/reward-chapter.png" });
 
   await proceedFrom(page, 2);
   await expect(
-    page.getByRole("button", { name: "Run learning with 100 agents" }),
+    page.getByRole("button", {
+      name: "Run sampled learning path for 100,000 commuters",
+    }),
   ).toBeVisible();
   await expect(page.locator('[data-proceed-act="3"]')).toBeHidden();
   await expect(page.locator("#stage-metrics")).toBeHidden();
   await page.screenshot({ path: "e2e/screenshots/learning-before-start.png" });
 
   await page
-    .getByRole("button", { name: "Run learning with 100 agents" })
+    .getByRole("button", {
+      name: "Run sampled learning path for 100,000 commuters",
+    })
     .click();
   await expect(stage).toHaveAttribute("data-learning-state", "playing");
   await expect
@@ -149,9 +167,27 @@ test("Start reveals a waiting network and concepts unlock one act at a time", as
   await expect(stage).toHaveAttribute("data-learning-state", "complete", {
     timeout: 35_000,
   });
-  await expect(stage).toHaveAttribute("data-route-counts", "0,0,100");
-  await expect(page.locator("#metric-routes")).toHaveText("0 / 0 / 100");
-  await expect(page.locator("#metric-latency")).toHaveText("80");
+  await expect(stage).toHaveAttribute("data-route-counts", "2580,2570,94850");
+  await expect(page.locator("#metric-routes")).toHaveText(
+    "2,580 / 2,570 / 94,850",
+  );
+  await expect(page.locator("#metric-latency")).toHaveText(
+    "116.989568 minutes",
+  );
+  const canvas = page.locator("#congestion-canvas");
+  await expect(canvas).toHaveAttribute("data-node-core-color", "#ffffff");
+  await expect(canvas).toHaveAttribute("data-endpoint-node-radius", "0.148");
+  await expect(canvas).toHaveAttribute("data-junction-node-radius", "0.13");
+  const flowEncoding = await canvas.evaluate((element) => ({
+    heavyRadius: Number(element.dataset.edgeRadiusSu),
+    lightRadius: Number(element.dataset.edgeRadiusUt),
+    heavyColor: element.dataset.edgeColorSu,
+    lightColor: element.dataset.edgeColorUt,
+  }));
+  expect(flowEncoding.heavyRadius).toBeGreaterThan(flowEncoding.lightRadius);
+  expect(flowEncoding.heavyRadius).toBeLessThanOrEqual(0.039);
+  expect(flowEncoding.lightRadius).toBeGreaterThanOrEqual(0.007);
+  expect(flowEncoding.heavyColor).not.toBe(flowEncoding.lightColor);
   await expect(page.locator('[data-proceed-act="3"]')).toBeVisible();
   await page.screenshot({ path: "e2e/screenshots/learning-complete.png" });
   expect(errors).toEqual([]);
@@ -180,12 +216,15 @@ test("the complete guided journey preserves exact closed, tolled, and replay sta
   await page.screenshot({ path: "e2e/screenshots/desktop-act4-landscape.png" });
 
   await proceedFrom(page, 4);
-  await expect(stage).toHaveAttribute("data-route-counts", "0,0,100");
-  await expect(page.locator("#metric-exploitability")).toHaveText("0");
+  await expect(stage).toHaveAttribute("data-route-counts", "0,0,100000");
+  await expect(page.locator("#metric-exploitability")).toHaveText("0 minutes");
   await expect(page.locator("#stable-inefficient")).toContainText(
-    "(44, 44, 12)",
+    "(50000, 50000, 0)",
   );
-  await expect(page.locator("#stable-inefficient")).toContainText("5000/4043");
+  await expect(page.locator("#stable-inefficient")).toContainText("4/3");
+  await expect(page.locator("#stable-inefficient")).toContainText(
+    "(0, 0, 100000), (0, 1, 99999), (1, 0, 99999), (1, 1, 99998)",
+  );
   await expect(canvas).toHaveAttribute("data-directional-arrows", "none");
   if ((await page.locator("body").getAttribute("data-webgl")) === "active") {
     const labelAudit = await page.evaluate(() => {
@@ -224,15 +263,17 @@ test("the complete guided journey preserves exact closed, tolled, and replay sta
   await proceedFrom(page, 5);
   await expect(stage).toHaveAttribute("data-scenario", "braess-closed");
   await expect(stage).toHaveAttribute("data-shortcut", "closed");
-  await expect(stage).toHaveAttribute("data-route-counts", "50,50");
-  await expect(page.locator("#metric-routes")).toHaveText("50 / 50 / 0");
-  await expect(page.locator("#metric-latency")).toHaveText("65");
+  await expect(stage).toHaveAttribute("data-route-counts", "50000,50000");
+  await expect(page.locator("#metric-routes")).toHaveText(
+    "50,000 / 50,000 / 0",
+  );
+  await expect(page.locator("#metric-latency")).toHaveText("90 minutes");
   await page.screenshot({ path: "e2e/screenshots/desktop-act6-closed.png" });
 
   await proceedFrom(page, 6);
   await expect(stage).toHaveAttribute("data-scenario", "braess-tolled");
   await expect(stage).toHaveAttribute("data-tolls", "active");
-  await expect(stage).toHaveAttribute("data-route-counts", "44,44,12");
+  await expect(stage).toHaveAttribute("data-route-counts", "50000,50000,0");
   await expect(stage).toHaveAttribute("data-surface", "physical-social-cost");
   await expect(canvas).toHaveAttribute("data-potential-morph", "1.0000");
   await expectVisibleElementsInsideViewport(
@@ -244,7 +285,9 @@ test("the complete guided journey preserves exact closed, tolled, and replay sta
 
   await proceedFrom(page, 7);
   await expect(page.locator("#learner-table tbody tr")).toHaveCount(3);
-  await expect(page.locator(".comparison-scope")).toContainText("100-agent");
+  await expect(page.locator(".comparison-scope")).toContainText(
+    "fully replicated 100-commuter study",
+  );
   await page.screenshot({
     path: "e2e/screenshots/desktop-act8-comparison.png",
   });
@@ -271,7 +314,7 @@ test("the complete guided journey preserves exact closed, tolled, and replay sta
   await expect(stage).toHaveAttribute("data-presentation-state", "waiting");
   await expect(page.locator("body")).toHaveAttribute(
     "data-bundle-population",
-    "100",
+    "100000",
   );
   await expect(
     page.locator(".chapter[data-story-act]:not([hidden])"),
@@ -279,10 +322,40 @@ test("the complete guided journey preserves exact closed, tolled, and replay sta
   expect(errors).toEqual([]);
 });
 
+test("a failed population request preserves the validated view and can be retried", async ({
+  page,
+}) => {
+  let attempts = 0;
+  await page.route("**/population-1000-v3.json", async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({ status: 503, body: "temporary failure" });
+      return;
+    }
+    await route.continue();
+  });
+  await startStory(page);
+  await page.locator('button[data-population="1000"]').click();
+  await expect(page.locator("#population-loading")).toContainText(
+    "Could not load",
+  );
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-bundle-population",
+    "100000",
+  );
+  await expect(page.locator("#stage")).toHaveAttribute(
+    "data-population",
+    "100000",
+  );
+  await selectPopulation(page, 1_000);
+  await expect(page.locator("#population-loading")).toHaveText("");
+  expect(attempts).toBe(2);
+});
+
 test("all population choices load distinct computed trajectories without stale values", async ({
   page,
 }) => {
-  test.setTimeout(45_000);
+  test.setTimeout(90_000);
   await page.emulateMedia({ reducedMotion: "reduce" });
   const errors = watchRuntimeErrors(page);
   await startStory(page);
@@ -291,19 +364,38 @@ test("all population choices load distinct computed trajectories without stale v
     performance.getEntriesByType("resource").map((entry) => entry.name),
   );
   expect(
-    initialResources.some((name) => name.includes("population-100-v2.json")),
-  ).toBe(true);
-  expect(
-    initialResources.some((name) => name.includes("population-1000-v2.json")),
+    initialResources.some((name) => name.includes("population-100-v3.json")),
   ).toBe(false);
   expect(
-    initialResources.some((name) => name.includes("population-10000-v2.json")),
+    initialResources.some((name) => name.includes("population-1000-v3.json")),
+  ).toBe(false);
+  expect(
+    initialResources.some((name) => name.includes("population-10000-v3.json")),
+  ).toBe(false);
+  expect(
+    initialResources.some((name) => name.includes("population-100000-v3.json")),
+  ).toBe(true);
+  expect(
+    initialResources.some((name) =>
+      name.includes("population-1000000-v3.json"),
+    ),
   ).toBe(false);
 
   await runLearningToCompletion(page);
   await expect(page.locator("#stage")).toHaveAttribute(
     "data-route-counts",
-    "0,0,100",
+    "2580,2570,94850",
+  );
+
+  await selectPopulation(page, 100);
+  await expect(page.locator("#stage")).toHaveAttribute(
+    "data-learning-study-kind",
+    "full-population",
+  );
+  await runLearningToCompletion(page);
+  await expect(page.locator("#stage")).toHaveAttribute(
+    "data-route-counts",
+    "23,20,57",
   );
 
   await selectPopulation(page, 1_000);
@@ -311,21 +403,20 @@ test("all population choices load distinct computed trajectories without stale v
     "data-presentation-state",
     "waiting",
   );
-  await expect(page.locator("#cohort-legend-item")).toBeVisible();
-  await expect(page.locator("#cohort-legend-text")).toContainText(
-    "about 6 agents",
+  await expect(page.locator("#stage")).toHaveAttribute(
+    "data-learning-study-kind",
+    "full-population",
+  );
+  await expect(page.locator("#learning-study-note")).toContainText(
+    "full-population study with 1,000 separate independent Q-learners",
   );
   await runLearningToCompletion(page);
   await expect(page.locator("#stage")).toHaveAttribute(
     "data-route-counts",
-    "7,9,984",
-  );
-  await expect(page.locator("#stage")).toHaveAttribute(
-    "data-visible-beads",
-    "180",
+    "61,68,871",
   );
   await page.screenshot({
-    path: "e2e/screenshots/population-1000-cohorts.png",
+    path: "e2e/screenshots/population-1000-flow.png",
   });
 
   await selectPopulation(page, 10_000);
@@ -333,8 +424,8 @@ test("all population choices load distinct computed trajectories without stale v
     "data-presentation-state",
     "waiting",
   );
-  await expect(page.locator("#cohort-legend-text")).toContainText(
-    "about 56 agents",
+  await expect(page.locator("#learning-study-note")).toContainText(
+    "full-population study with 10,000 separate independent Q-learners",
   );
   await runLearningToCompletion(page);
   await expect(page.locator("#stage")).toHaveAttribute(
@@ -343,22 +434,61 @@ test("all population choices load distinct computed trajectories without stale v
   );
   await expect(
     page.locator("#stable-inefficient [data-exact='open-equilibrium-counts']"),
-  ).toHaveText("(0, 0, 10000)");
+  ).toHaveText(["(0, 0, 10000)", "(0, 0, 10000)"]);
   await expect(page.locator("#landscape-sampling-note")).toContainText(
     "samples the exact potential formula",
   );
   await page.screenshot({
-    path: "e2e/screenshots/population-10000-cohorts.png",
+    path: "e2e/screenshots/population-10000-flow.png",
   });
+
+  for (const population of [100_000, 1_000_000] as const) {
+    await selectPopulation(page, population);
+    await expect(page.locator("#stage")).toHaveAttribute(
+      "data-learning-study-kind",
+      "sampled-population-proxy",
+    );
+    await expect(page.locator("#stage")).toHaveAttribute(
+      "data-represented-population",
+      String(population),
+    );
+    await expect(page.locator("#stage")).toHaveAttribute(
+      "data-simulated-learners",
+      "10000",
+    );
+    await expect(page.locator("#learning-study-note")).toContainText(
+      "10,000 independently simulated commuters",
+    );
+    await expect(page.locator("#learning-study-note")).toContainText(
+      `full population of ${population.toLocaleString()}`,
+    );
+    await runLearningToCompletion(page);
+    await expect(page.locator("#stage")).toHaveAttribute(
+      "data-route-counts",
+      population === 100_000 ? "2580,2570,94850" : "25800,25700,948500",
+    );
+    await page.screenshot({
+      path: `e2e/screenshots/population-${population}-sampled-flow.png`,
+    });
+  }
+  await expect(
+    page.locator("#stable-inefficient [data-exact='open-equilibrium-counts']"),
+  ).toHaveText(["(0, 0, 1000000)", "(0, 0, 1000000)"]);
 
   const resources = await page.evaluate(() =>
     performance.getEntriesByType("resource").map((entry) => entry.name),
   );
   expect(
-    resources.some((name) => name.includes("population-1000-v2.json")),
+    resources.some((name) => name.includes("population-1000-v3.json")),
   ).toBe(true);
   expect(
-    resources.some((name) => name.includes("population-10000-v2.json")),
+    resources.some((name) => name.includes("population-10000-v3.json")),
+  ).toBe(true);
+  expect(
+    resources.some((name) => name.includes("population-100000-v3.json")),
+  ).toBe(true);
+  expect(
+    resources.some((name) => name.includes("population-1000000-v3.json")),
   ).toBe(true);
   expect(errors).toEqual([]);
 });

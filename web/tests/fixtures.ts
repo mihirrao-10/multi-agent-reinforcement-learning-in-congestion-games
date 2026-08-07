@@ -16,7 +16,7 @@ export function loadManifestFixture(): StoryManifest {
   if (manifest) return manifest;
   const raw: unknown = JSON.parse(
     readFileSync(
-      resolve(import.meta.dirname, "../public/data/manifest-v2.json"),
+      resolve(import.meta.dirname, "../public/data/manifest-v3.json"),
       "utf8",
     ),
   );
@@ -31,7 +31,7 @@ export function loadFixture(population: Population = 100): PopulationBundle {
     readFileSync(
       resolve(
         import.meta.dirname,
-        `../public/data/population-${population}-v2.json`,
+        `../public/data/population-${population}-v3.json`,
       ),
       "utf8",
     ),

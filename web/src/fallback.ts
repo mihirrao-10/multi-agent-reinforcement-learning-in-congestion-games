@@ -1,6 +1,10 @@
 import type { NetworkPresentation } from "./data/story-schema";
-import { allocateVisualCohorts, visibleBeadBudget } from "./scene/cohorts";
-import { edgeColorHex, edgeRadius } from "./scene/materials";
+import {
+  edgeColorHex,
+  edgeOpacity,
+  edgeRadius,
+  type EdgeRole,
+} from "./scene/materials";
 
 const PATHS = {
   SU: "M 58 150 C 120 80, 180 65, 250 78",
@@ -15,52 +19,66 @@ const ROUTE_EDGES = {
   L: new Set(["SV", "VT"]),
   Z: new Set(["SU", "UV", "VT"]),
 } as const;
-const ROUTES = [
-  ["SU", "UT"],
-  ["SV", "VT"],
-  ["SU", "UV", "VT"],
-] as const;
 
 type EdgeId = keyof typeof PATHS;
+
+function edgeRole(edge: EdgeId): EdgeRole {
+  if (edge === "UV") return "shortcut";
+  if (edge === "UT" || edge === "SV") return "constant";
+  return "variable";
+}
 
 export class NetworkFallback {
   private readonly container: HTMLElement;
   private readonly paths = new Map<EdgeId, SVGPathElement>();
-  private readonly beadLayer: SVGGElement;
+  private readonly glows = new Map<EdgeId, SVGPathElement>();
   private activeRoute: keyof typeof ROUTE_EDGES | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
     this.container.hidden = false;
+    this.container.dataset.flowRendering = "continuous-lines";
     const wrapper = document.createElement("div");
     wrapper.className = "fallback-network";
     wrapper.innerHTML = `
       <svg viewBox="0 0 560 300" role="img" aria-labelledby="fallback-title fallback-desc">
-        <title id="fallback-title">Braess network fallback</title>
-        <desc id="fallback-desc">Four bright nodes and five thin joined edges show the same population-aware journey without WebGL.</desc>
-        <g fill="none" stroke-linecap="round">
+        <title id="fallback-title">Braess highway network fallback</title>
+        <desc id="fallback-desc">Four glowing white nodes and five continuous translucent flows preserve traffic-share color and thickness without WebGL.</desc>
+        <g class="fallback-flow-glows" fill="none" stroke-linecap="round">
+          ${Object.entries(PATHS)
+            .map(
+              ([edge, path]) => `<path data-glow-edge="${edge}" d="${path}" />`,
+            )
+            .join("")}
+        </g>
+        <g class="fallback-flow-bodies" fill="none" stroke-linecap="round">
           ${Object.entries(PATHS)
             .map(([edge, path]) => `<path data-edge="${edge}" d="${path}" />`)
             .join("")}
         </g>
-        <g class="fallback-beads" fill="#fff1d0"></g>
-        <g fill="#fff9e8" stroke="#ffb84d" stroke-width="4">
-          <circle cx="58" cy="150" r="11"/><circle cx="250" cy="78" r="10"/>
-          <circle cx="250" cy="222" r="10"/><circle cx="502" cy="150" r="11"/>
+        <g class="fallback-node-halos" fill="#ffffff" opacity="0.13">
+          <circle cx="58" cy="150" r="23"/><circle cx="250" cy="78" r="20"/>
+          <circle cx="250" cy="222" r="20"/><circle cx="502" cy="150" r="23"/>
         </g>
-        <g fill="#f5f5f5" font-family="system-ui" font-size="13" text-anchor="middle">
-          <text x="58" y="181">S</text><text x="250" y="50">U</text>
-          <text x="250" y="258">V</text><text x="502" y="181">T</text>
+        <g class="fallback-node-cores" fill="#ffffff">
+          <circle cx="58" cy="150" r="14"/><circle cx="250" cy="78" r="12"/>
+          <circle cx="250" cy="222" r="12"/><circle cx="502" cy="150" r="14"/>
+        </g>
+        <g fill="#ffffff" font-family="system-ui" font-size="13" text-anchor="middle">
+          <text x="58" y="184">S</text><text x="250" y="48">U</text>
+          <text x="250" y="260">V</text><text x="502" y="184">T</text>
         </g>
       </svg>
-      <p>WebGL is unavailable, so a native SVG preserves the same waiting state, route loads, cohort weights, and journey controls.</p>`;
+      <p>WebGL is unavailable, so a native SVG preserves the same guide state, exact route loads, continuous-flow encoding, and journey controls.</p>`;
     this.container.replaceChildren(wrapper);
     wrapper.querySelectorAll<SVGPathElement>("[data-edge]").forEach((path) => {
       this.paths.set(path.dataset.edge as EdgeId, path);
     });
-    const beadLayer = wrapper.querySelector<SVGGElement>(".fallback-beads");
-    if (!beadLayer) throw new Error("fallback bead layer is missing");
-    this.beadLayer = beadLayer;
+    wrapper
+      .querySelectorAll<SVGPathElement>("[data-glow-edge]")
+      .forEach((path) => {
+        this.glows.set(path.dataset.glowEdge as EdgeId, path);
+      });
   }
 
   update(
@@ -69,19 +87,24 @@ export class NetworkFallback {
     population: number,
     waiting: boolean,
   ): void {
+    this.container.dataset.population = String(population);
     for (const [edge, path] of this.paths) {
       const load = waiting ? 0 : (snapshot?.edgeLoads[edge] ?? 0);
-      path.style.strokeWidth = `${Math.max(1.5, edgeRadius(load, population) * 150)}`;
-      const role =
-        edge === "UV"
-          ? "shortcut"
-          : edge === "UT" || edge === "SV"
-            ? "constant"
-            : "variable";
-      path.style.stroke = edgeColorHex(role, load, population);
-      path.dataset.baseOpacity = edge === "UV" && !shortcutOpen ? "0" : "1";
+      const role = edgeRole(edge);
+      const radius = edgeRadius(load, population);
+      const color = edgeColorHex(role, load, population);
+      const visible = edge !== "UV" || shortcutOpen;
+      const opacity = visible ? edgeOpacity(role, load, population) : 0;
+      path.style.strokeWidth = `${Math.max(1.8, radius * 180)}`;
+      path.style.stroke = color;
+      path.dataset.baseOpacity = String(opacity);
+      const glow = this.glows.get(edge);
+      if (glow) {
+        glow.style.strokeWidth = `${Math.max(4.2, radius * 180 + 4)}`;
+        glow.style.stroke = color;
+        glow.dataset.baseOpacity = String(opacity * 0.2);
+      }
     }
-    this.renderBeads(snapshot, population, waiting);
     this.applyHighlight();
   }
 
@@ -97,60 +120,20 @@ export class NetworkFallback {
     this.applyHighlight();
   }
 
-  private renderBeads(
-    snapshot: NetworkPresentation | null,
-    population: number,
-    waiting: boolean,
-  ): void {
-    const namespace = "http://www.w3.org/2000/svg";
-    const circles: SVGCircleElement[] = [];
-    if (waiting || !snapshot) {
-      const count = visibleBeadBudget(population);
-      for (let index = 0; index < count; index += 1) {
-        const circle = document.createElementNS(namespace, "circle");
-        const angle = (index * 2.399963) % (Math.PI * 2);
-        const radius = 4 + Math.floor(index / 28) * 2.2;
-        circle.setAttribute("cx", String(58 + Math.cos(angle) * radius));
-        circle.setAttribute("cy", String(150 + Math.sin(angle) * radius));
-        circle.setAttribute("r", "1.7");
-        circles.push(circle);
-      }
-    } else {
-      const counts =
-        snapshot.routeCounts.length === 2
-          ? [...snapshot.routeCounts, 0]
-          : snapshot.routeCounts;
-      const cohorts = allocateVisualCohorts(counts, population);
-      cohorts.forEach((cohort) => {
-        const route = ROUTES[cohort.routeIndex]!;
-        const phase = (cohort.ordinalOnRoute + 0.5) / cohort.visibleOnRoute;
-        const edgeIndex = Math.min(
-          route.length - 1,
-          Math.floor(phase * route.length),
-        );
-        const path = this.paths.get(route[edgeIndex]!);
-        if (!path) return;
-        const local = (phase * route.length) % 1;
-        const point = path.getPointAtLength(path.getTotalLength() * local);
-        const circle = document.createElementNS(namespace, "circle");
-        circle.setAttribute("cx", String(point.x));
-        circle.setAttribute("cy", String(point.y));
-        circle.setAttribute("r", "1.8");
-        circles.push(circle);
-      });
-    }
-    this.beadLayer.replaceChildren(...circles);
-  }
-
   private applyHighlight(): void {
     for (const [edge, path] of this.paths) {
       const highlighted =
         this.activeRoute === null || ROUTE_EDGES[this.activeRoute].has(edge);
-      path.style.filter = highlighted ? "brightness(1.18)" : "brightness(0.42)";
-      const baseOpacity = Number(path.dataset.baseOpacity ?? "1");
-      path.style.opacity = String(
-        highlighted ? baseOpacity : baseOpacity * 0.2,
-      );
+      for (const element of [path, this.glows.get(edge)]) {
+        if (!element) continue;
+        element.style.filter = highlighted
+          ? "brightness(1.14)"
+          : "brightness(0.42)";
+        const baseOpacity = Number(element.dataset.baseOpacity ?? "1");
+        element.style.opacity = String(
+          highlighted ? baseOpacity : baseOpacity * 0.2,
+        );
+      }
     }
   }
 }

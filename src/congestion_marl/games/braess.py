@@ -49,8 +49,8 @@ class BraessGame:
         loads = self.edge_loads(counts)
         return {
             "SU": variable_latency(loads["SU"], self.population),
-            "UT": Fraction(45),
-            "SV": Fraction(45),
+            "UT": Fraction(60),
+            "SV": Fraction(60),
             "VT": variable_latency(loads["VT"], self.population),
             "UV": Fraction(0),
         }
@@ -128,9 +128,9 @@ class BraessGame:
     def social_cost(self, counts: CountState) -> Fraction:
         loads = self.edge_loads(counts)
         return (
-            Fraction(40 * loads["SU"] * loads["SU"], self.population)
-            + Fraction(40 * loads["VT"] * loads["VT"], self.population)
-            + Fraction(45 * (loads["UT"] + loads["SV"]))
+            Fraction(60 * loads["SU"] * loads["SU"], self.population)
+            + Fraction(60 * loads["VT"] * loads["VT"], self.population)
+            + Fraction(60 * (loads["UT"] + loads["SV"]))
         )
 
     def total_toll_payment(self, counts: CountState) -> Fraction:
@@ -141,9 +141,9 @@ class BraessGame:
     def rosenthal_potential(self, counts: CountState) -> Fraction:
         loads = self.edge_loads(counts)
         return (
-            Fraction(20 * loads["SU"] * (loads["SU"] + 1), self.population)
-            + Fraction(20 * loads["VT"] * (loads["VT"] + 1), self.population)
-            + Fraction(45 * (loads["UT"] + loads["SV"]))
+            Fraction(30 * loads["SU"] * (loads["SU"] + 1), self.population)
+            + Fraction(30 * loads["VT"] * (loads["VT"] + 1), self.population)
+            + Fraction(60 * (loads["UT"] + loads["SV"]))
         )
 
     def perceived_potential(self, counts: CountState) -> Fraction:

@@ -113,14 +113,36 @@ canvas:focus-visible,
   height: 100svh;
   padding: 1.5rem;
   place-content: center;
-  justify-items: start;
-  gap: 1.7rem;
+  justify-items: center;
+  gap: 1.35rem;
   background: #000;
+  text-align: center;
 }
 
 .opening-screen .principal-title {
   max-width: 13ch;
   margin: 0;
+}
+
+.opening-repository-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.42rem;
+  color: #9a9a9a;
+  font-family: var(--sans);
+  font-size: 0.69rem;
+  letter-spacing: 0.035em;
+  text-decoration-color: #525252;
+}
+
+.opening-repository-link:hover {
+  color: var(--white);
+}
+
+.opening-repository-link svg {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .preparation-status {
@@ -382,17 +404,37 @@ button:disabled {
 }
 
 .legend-traffic {
-  background: radial-gradient(circle, var(--cream) 0 1px, transparent 1.4px) 0
-    0 / 5px 3px;
+  height: 6px !important;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgb(44 214 123 / 30%), var(--green));
 }
 
 .legend-latency {
   background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
 }
 
-.legend-cohort {
-  border: 1px solid var(--cream);
-  background: transparent;
+.legend-direction {
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 15%),
+    rgb(255 255 255 / 85%),
+    rgb(255 255 255 / 15%)
+  );
+  background-size: 220% 100%;
+  animation: legend-flow 2.4s linear infinite;
+}
+
+.legend-shortcut {
+  border-radius: 999px;
+  background: rgb(255 226 163 / 72%);
+  box-shadow: 0 0 5px rgb(255 226 163 / 28%);
+}
+
+@keyframes legend-flow {
+  to {
+    background-position: -220% 0;
+  }
 }
 
 .legend-surface {
@@ -435,7 +477,7 @@ button:disabled {
   min-height: 2.7rem;
   margin-top: 0.55rem;
   align-items: center;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 0.55rem;
   border-top: 1px solid #232323;
 }
@@ -449,20 +491,26 @@ button:disabled {
 
 .population-options {
   display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-start;
   gap: 0.25rem;
 }
 
 .population-options button {
   min-height: 2rem;
   padding: 0.35rem 0.55rem;
+  flex: 0 1 auto;
 }
 
 .population-loading {
+  min-height: 0.82rem;
   min-width: 0;
+  grid-column: 1 / -1;
   overflow: hidden;
   color: var(--quiet);
   font-size: 0.57rem;
-  text-align: right;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -799,6 +847,18 @@ th {
   text-align: center;
 }
 
+.fallback-flow-bodies path,
+.fallback-flow-glows path {
+  transition:
+    stroke 320ms ease,
+    stroke-width 320ms ease,
+    opacity 320ms ease;
+}
+
+.fallback-flow-glows {
+  filter: blur(2px);
+}
+
 @media (max-width: 1120px) {
   .story-layout {
     padding-inline: 1.25rem;
@@ -918,11 +978,14 @@ th {
 
   .population-options button {
     min-height: 44px;
-    flex: 1 1 auto;
+    padding-inline: 0.42rem;
+    flex: 1 1 4.4rem;
   }
 
   .population-loading {
-    display: none;
+    min-height: 1rem;
+    font-size: 0.52rem;
+    white-space: normal;
   }
 
   .chapter {
@@ -994,5 +1057,9 @@ th {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  .legend-direction {
+    background-position: 45% 0;
   }
 }

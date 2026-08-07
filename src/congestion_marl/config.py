@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-POPULATION = 100
-SUPPORTED_POPULATIONS = (100, 1_000, 10_000)
+CANONICAL_STUDY_POPULATION = 100
+DEFAULT_STORY_POPULATION = 100_000
+# Keep the established public API name for the fully replicated research study.
+POPULATION = CANONICAL_STUDY_POPULATION
+SUPPORTED_POPULATIONS = (100, 1_000, 10_000, 100_000, 1_000_000)
+SAMPLED_STUDY_POPULATIONS = (100_000, 1_000_000)
+SAMPLED_LEARNERS = 10_000
 BASE_SEED = 20260804
 
 
@@ -85,10 +90,29 @@ def experiment_config_for_population(population: int) -> ExperimentConfig:
     # Large presets retain one deterministic audited run per scenario. Fewer
     # episodes keep the public regeneration path practical while the separate
     # epsilon-zero evaluation remains unchanged.
+    simulated_learners = SAMPLED_LEARNERS if population in SAMPLED_STUDY_POPULATIONS else population
     episodes = 3_200 if population == 1_000 else 2_400
     return ExperimentConfig(
         seeds=1,
         best_response_seeds=1,
-        q_learning=QLearningConfig(agents=population, episodes=episodes),
-        hedge=HedgeConfig(agents=population, episodes=episodes),
+        q_learning=QLearningConfig(agents=simulated_learners, episodes=episodes),
+        hedge=HedgeConfig(agents=simulated_learners, episodes=episodes),
     )
+
+
+def learning_study_kind(population: int) -> str:
+    """Return the audited public learning-study kind for a represented population."""
+
+    if population not in SUPPORTED_POPULATIONS:
+        raise ValueError(f"unsupported public population {population}")
+    return (
+        "sampled-population-proxy" if population in SAMPLED_STUDY_POPULATIONS else "full-population"
+    )
+
+
+def simulated_learner_count(population: int) -> int:
+    """Return the number of separate tabular learners used by the public study."""
+
+    if population not in SUPPORTED_POPULATIONS:
+        raise ValueError(f"unsupported public population {population}")
+    return SAMPLED_LEARNERS if population in SAMPLED_STUDY_POPULATIONS else population

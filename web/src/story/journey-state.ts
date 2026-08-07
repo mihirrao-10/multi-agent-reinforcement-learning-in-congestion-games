@@ -34,7 +34,9 @@ export interface ConceptVisibility {
   readonly landscapeLegend: boolean;
 }
 
-export function initialJourneyState(): JourneyState {
+export function initialJourneyState(
+  selectedPopulation: Population = 100,
+): JourneyState {
   return {
     started: false,
     activeAct: 0,
@@ -42,7 +44,7 @@ export function initialJourneyState(): JourneyState {
     learningIntroduced: false,
     learningStarted: false,
     learningCompleted: false,
-    selectedPopulation: 100,
+    selectedPopulation,
     sceneMilestones: {
       landscapeSeen: false,
       equilibriumSeen: false,

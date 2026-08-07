@@ -12,15 +12,15 @@ def test_tolled_potential_telescopes_over_every_state() -> None:
     assert checks == 30300
     assert toll_checks == 5151
     for load in range(101):
-        assert telescoped_variable_social_cost(load) == Fraction(2 * load * load, 5)
+        assert telescoped_variable_social_cost(load) == Fraction(3 * load * load, 5)
 
 
 def test_tolled_unique_equilibrium_is_physical_optimum() -> None:
     analysis = analyze_scenario(Scenario.TOLLED)
     game = BraessGame(Scenario.TOLLED)
-    state = (44, 44, 12)
+    state = (50, 50, 0)
     assert analysis.equilibria == analysis.social_optima == (state,)
-    assert game.social_cost(state) == Fraction(32344, 5)
+    assert game.social_cost(state) == Fraction(9000)
     assert game.exploitability(state) == 0
-    assert game.route_tolls(state)[Route.SHORTCUT] == 44
+    assert game.route_tolls(state)[Route.SHORTCUT] == Fraction(294, 5)
     assert game.total_toll_payment(state) > 0

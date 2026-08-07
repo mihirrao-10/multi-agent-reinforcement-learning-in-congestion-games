@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import pairwise
 
 import numpy as np
 
@@ -10,6 +11,58 @@ from congestion_marl.games.braess import BraessGame
 from congestion_marl.simulation.engine import LearningRun, counts_from_action_indices
 from congestion_marl.simulation.seeds import make_streams
 from congestion_marl.types import CountState
+
+
+def exact_large_population_best_response_path(
+    game: BraessGame, *, maximum_checkpoints: int = 144
+) -> tuple[tuple[CountState, ...], int]:
+    """Return exact ordered checkpoints without materializing an O(N) path.
+
+    The authored open 60-minute game admits a transparent strict-improvement
+    sequence. Start with one third of commuters on each ordinary route and
+    alternate moving one ordinary-route commuter to Shortcut until one remains
+    on each ordinary route. Whenever the origin count is k > 1, the mover's
+    cost falls by exactly 60(k-1)/N minutes, and Rosenthal potential falls by
+    the same amount. The returned points are deterministic checkpoints from
+    that exact one-agent sequence; ``raw_state_count`` records its full length.
+    """
+
+    if game.scenario.value != "braess-open" or len(game.routes) != 3:
+        raise ValueError("the authored checkpoint path requires the open three-route game")
+    if maximum_checkpoints < 2:
+        raise ValueError("at least two checkpoints are required")
+    upper_start = game.population // 3
+    lower_start = game.population // 3
+    if upper_start < 1 or lower_start < 1:
+        raise ValueError("the authored checkpoint path requires at least three commuters")
+    shortcut_start = game.population - upper_start - lower_start
+    total_moves = (upper_start - 1) + (lower_start - 1)
+    raw_state_count = total_moves + 1
+    checkpoint_count = min(maximum_checkpoints, raw_state_count)
+    steps = tuple(
+        dict.fromkeys(
+            round(index * total_moves / (checkpoint_count - 1)) for index in range(checkpoint_count)
+        )
+    )
+
+    def state_at(step: int) -> CountState:
+        upper_moves = (step + 1) // 2
+        lower_moves = step // 2
+        return (
+            upper_start - upper_moves,
+            lower_start - lower_moves,
+            shortcut_start + step,
+        )
+
+    checkpoints = tuple(state_at(step) for step in steps)
+    potentials = tuple(game.rosenthal_potential(state) for state in checkpoints)
+    if not all(left > right for left, right in pairwise(potentials)):
+        raise AssertionError("authored best-response checkpoints do not descend")
+    if checkpoints[-1] != (1, 1, game.population - 2):
+        raise AssertionError("authored best-response path has the wrong terminal profile")
+    if not game.is_pure_nash(checkpoints[-1]):
+        raise AssertionError("authored best-response path misses a pure equilibrium")
+    return checkpoints, raw_state_count
 
 
 def strict_best_response_count_path(

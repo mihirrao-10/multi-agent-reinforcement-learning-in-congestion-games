@@ -1,10 +1,10 @@
-"""Exact count-state analysis with a linear large-population reduction."""
+"""Exact count-state analysis with constant-size convex candidate reductions."""
 
 from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations
-from math import comb
+from math import ceil, comb, floor
 
 from congestion_marl.config import POPULATION
 from congestion_marl.games.braess import BraessGame
@@ -53,14 +53,40 @@ def _minimizing_integers(values: list[tuple[int, Fraction]]) -> tuple[int, ...]:
     return tuple(index for index, value in values if value == minimum)
 
 
+def _convex_integer_candidates(center: Fraction, upper: int) -> tuple[int, ...]:
+    """Return a proof-sufficient neighborhood for a bounded convex quadratic."""
+
+    clamped = min(Fraction(upper), max(Fraction(0), center))
+    anchors = {floor(clamped), ceil(clamped), 0, upper}
+    candidates = {
+        candidate
+        for anchor in anchors
+        for candidate in (anchor - 1, anchor, anchor + 1)
+        if 0 <= candidate <= upper
+    }
+    return tuple(sorted(candidates))
+
+
+def _open_component_center(game: BraessGame, *, social: bool) -> Fraction:
+    """Return the exact continuous minimizer of one open-game component."""
+
+    if social:
+        return Fraction(game.population, 2)
+    # With z = N-u-l, the untolled potential separates into identical
+    # multiples of k(k-1). Its continuous vertex is 1/2, so k=0 and k=1
+    # tie. Those ties are the source of the additional weak pure equilibria.
+    return Fraction(1, 2)
+
+
 def _open_separable_minima(game: BraessGame, *, social: bool) -> tuple[CountState, ...]:
-    """Minimize f(u)+f(l) by one exact O(N) scan.
+    """Minimize f(u)+f(l) from a constant exact candidate neighborhood.
 
     For the open game, both social cost and perceived potential are sums of two
     identical discrete-convex functions of the Upper and Lower route counts.
-    Each component minimizer lies below N/2, so every Cartesian pair satisfies
-    u+l<=N. Discrete convexity then makes these global minimizers exactly the
-    one-agent local minima as well.
+    Each component minimizer lies at the nearest bounded integer or an adjacent
+    tie candidate around the exact quadratic vertex. Infeasible Cartesian pairs
+    are removed. Discrete convexity makes the selected global potential
+    minimizers exactly the one-agent local minima as well.
     """
 
     population = game.population
@@ -69,8 +95,9 @@ def _open_separable_minima(game: BraessGame, *, social: bool) -> tuple[CountStat
         state = (component, 0, population - component)
         return game.social_cost(state) if social else game.perceived_potential(state)
 
+    candidates = _convex_integer_candidates(_open_component_center(game, social=social), population)
     minimizers = _minimizing_integers(
-        [(component, objective(component)) for component in range(population + 1)]
+        [(component, objective(component)) for component in candidates]
     )
     states = tuple(
         (upper, lower, population - upper - lower)
@@ -86,7 +113,7 @@ def _open_separable_minima(game: BraessGame, *, social: bool) -> tuple[CountStat
 def _closed_minima(game: BraessGame, *, social: bool) -> tuple[CountState, ...]:
     population = game.population
     values = []
-    for upper in range(population + 1):
+    for upper in _convex_integer_candidates(Fraction(population, 2), population):
         state = (upper, population - upper)
         value = game.social_cost(state) if social else game.perceived_potential(state)
         values.append((upper, value))
@@ -171,7 +198,7 @@ def potential_identity_summary(
 
 
 def analyze_scenario(scenario: Scenario, population: int = POPULATION) -> ExactScenarioAnalysis:
-    """Derive every equilibrium, optimum, and efficiency ratio in O(N) time."""
+    """Derive every equilibrium, optimum, and efficiency ratio in constant space."""
 
     game = BraessGame(scenario, population)
     equilibria = exact_equilibria(game)

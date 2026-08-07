@@ -18,7 +18,7 @@ def test_remove_then_add_deviation_changes_own_load() -> None:
     game = BraessGame(Scenario.OPEN)
     state = (0, 0, 100)
     assert game.counterfactual_counts(state, Route.SHORTCUT, Route.UPPER) == (1, 0, 99)
-    assert game.counterfactual_cost(state, Route.SHORTCUT, Route.UPPER) == 85
+    assert game.counterfactual_cost(state, Route.SHORTCUT, Route.UPPER) == 120
     current = game.route_physical_costs(state)[Route.SHORTCUT]
     changed = game.counterfactual_counts(state, Route.SHORTCUT, Route.UPPER)
-    assert game.rosenthal_potential(changed) - game.rosenthal_potential(state) == 85 - current
+    assert game.rosenthal_potential(changed) - game.rosenthal_potential(state) == 120 - current

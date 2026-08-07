@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from functools import lru_cache
 from itertools import pairwise
 from pathlib import Path
 from typing import cast
@@ -10,13 +11,16 @@ from typing import cast
 import numpy as np
 
 from congestion_marl import __version__
+from congestion_marl.analysis.diagnostics import normalized_count_distance
 from congestion_marl.analysis.enumeration import analyze_scenario, weak_compositions
 from congestion_marl.config import (
-    BASE_SEED,
+    DEFAULT_STORY_POPULATION,
     POPULATION,
     SUPPORTED_POPULATIONS,
     ExperimentConfig,
     experiment_config_for_population,
+    learning_study_kind,
+    simulated_learner_count,
 )
 from congestion_marl.export.json_writer import deterministic_json_bytes, write_deterministic_json
 from congestion_marl.export.schema import (
@@ -27,12 +31,22 @@ from congestion_marl.export.schema import (
 )
 from congestion_marl.games.braess import BraessGame
 from congestion_marl.games.network import EDGES, NODES, ROUTE_EDGES
-from congestion_marl.learners.best_response import strict_best_response_count_path
+from congestion_marl.learners.best_response import exact_large_population_best_response_path
+from congestion_marl.simulation.aggregation import (
+    aggregate_summaries,
+    largest_remainder_scale_counts,
+)
 from congestion_marl.simulation.experiments import run_experiment_matrix, run_q_learning_study
 from congestion_marl.simulation.seeds import seed_policy
 from congestion_marl.types import ExactScenarioAnalysis, Route, Scenario
 
-LANDSCAPE_RESOLUTION = {100: 100, 1_000: 64, 10_000: 64}
+LANDSCAPE_RESOLUTION = {
+    100: 100,
+    1_000: 64,
+    10_000: 64,
+    100_000: 64,
+    1_000_000: 64,
+}
 MAX_DISPLAY_PATH_POINTS = 144
 
 
@@ -81,7 +95,7 @@ def _shared_model_payload() -> dict[str, object]:
                 "source": edge.source,
                 "target": edge.target,
                 "physicalLatency": edge.latency_kind,
-                "toll": "40(load - 1) / N" if edge.identifier in {"SU", "VT"} else "0",
+                "toll": ("60(load - 1) / N minutes" if edge.identifier in {"SU", "VT"} else "0"),
             }
             for edge in EDGES
         ],
@@ -99,14 +113,16 @@ def _shared_model_payload() -> dict[str, object]:
             for code, route in enumerate((Route.UPPER, Route.LOWER, Route.SHORTCUT))
         ],
         "routeCodeMapping": ROUTE_CODES,
-        "latencyRule": "c_N(x) = 40x/N on SU and VT; 45 on UT and SV; 0 on UV",
-        "units": "authored latency units per episode",
+        "latencyRule": (
+            "c_N(x) = 60x/N minutes on SU and VT; 60 minutes on UT and SV; 0 minutes on UV"
+        ),
+        "units": "minutes per morning commute",
         "conventions": {
             "cost": "lower is better",
             "reward": "negative perceived route cost, so higher is better",
             "exploitability": "largest available unilateral perceived-cost reduction",
             "socialObjective": "physical travel latency only; toll payments are transfers",
-            "unusedEdgeColor": "green because no traveler experiences its latency",
+            "roadEncoding": "color and thickness both encode normalized edge load",
         },
         "scenarios": [
             {
@@ -227,7 +243,10 @@ def build_potential_landscape(
                         grid_index[(upper, lower + 1, shortcut - 1)],
                     ]
                 )
-    path, potential_path = strict_best_response_count_path(game, BASE_SEED + population)
+    path, raw_state_count = exact_large_population_best_response_path(
+        game, maximum_checkpoints=MAX_DISPLAY_PATH_POINTS
+    )
+    potential_path = tuple(game.rosenthal_potential(state) for state in path)
 
     def trajectory_point(state: tuple[int, ...]) -> dict[str, object]:
         canonical = cast(tuple[int, int, int], state)
@@ -303,32 +322,62 @@ def build_potential_landscape(
         "cornerLabels": ["all Upper", "all Lower", "all Shortcut"],
         "trajectories": {
             **learning_trajectories,
-            "braess-open-best-response": [
-                trajectory_point(state) for state in _downsample_path(path)
-            ],
+            "braess-open-best-response": [trajectory_point(state) for state in path],
         },
         "bestResponseAudit": {
-            "rawStepCount": len(path),
-            "renderedPointCount": min(len(path), MAX_DISPLAY_PATH_POINTS),
+            "rawStepCount": raw_state_count,
+            "renderedPointCount": len(path),
             "rawPathValidated": True,
+            "pathPopulation": population,
+            "representedPopulation": population,
+            "scaledForDisplay": False,
             "everyMoveIsOneAgent": True,
+            "everySimulatedMoveIsOneLearner": True,
             "strictlyDecreasingPotential": all(
                 left > right for left, right in pairwise(potential_path)
             ),
+            "simulatedPotentialStrictlyDecreasing": True,
             "renderedDescription": (
-                "complete strict-improvement sequence"
-                if len(path) <= MAX_DISPLAY_PATH_POINTS
-                else "downsampled strict-improvement sequence"
+                "complete exact one-agent strict-improvement sequence"
+                if raw_state_count <= MAX_DISPLAY_PATH_POINTS
+                else (
+                    "ordered checkpoints from an exact alternating one-agent "
+                    "strict-improvement sequence"
+                )
             ),
         },
     }
 
 
-def _configuration_payload(config: ExperimentConfig) -> dict[str, object]:
-    scale = config.population != POPULATION
+def _learning_study_payload(population: int) -> dict[str, object]:
+    simulated = simulated_learner_count(population)
+    kind = learning_study_kind(population)
+    if kind == "sampled-population-proxy":
+        description = (
+            f"{simulated:,} independent tabular learners estimate normalized route shares "
+            f"for the represented population of {population:,}."
+        )
+    else:
+        description = (
+            f"All {population:,} represented commuters are independently simulated with "
+            "one separate tabular Q row each."
+        )
+    return {
+        "learningStudyKind": kind,
+        "representedPopulation": population,
+        "simulatedLearners": simulated,
+        "samplingDescription": description,
+    }
+
+
+def _configuration_payload(
+    config: ExperimentConfig, represented_population: int
+) -> dict[str, object]:
+    study = _learning_study_payload(represented_population)
+    scale = represented_population != POPULATION
     return {
         "profile": "canonical-64-seed-study" if not scale else "deterministic-scale-study",
-        "agents": config.population,
+        **study,
         "qLearning": {
             "episodes": config.q_learning.episodes,
             "initialQ": config.q_learning.initial_q,
@@ -346,8 +395,8 @@ def _configuration_payload(config: ExperimentConfig) -> dict[str, object]:
             "64 deterministic seeds per scenario"
             if not scale
             else (
-                "one deterministic audited run per scenario; uncertainty is not compared "
-                "with the 100-agent study"
+                "one deterministic audited run per scenario; this one-seed study is not "
+                "presented as equally replicated with the 100-commuter study"
             )
         ),
         "snapshotStrategy": "population-aware deterministic adaptive thinning",
@@ -374,6 +423,96 @@ def _presentation_profile(game: BraessGame, state: tuple[int, ...]) -> dict[str,
         "perceivedPotential": float(game.perceived_potential(state)),
         "exploitability": float(game.exploitability(state)),
     }
+
+
+def _scaled_summary(
+    summary: dict[str, object], scenario: Scenario, represented_population: int
+) -> dict[str, object]:
+    game = BraessGame(scenario, represented_population)
+    exact = analyze_scenario(scenario, represented_population)
+    training = largest_remainder_scale_counts(
+        tuple(cast(list[int], summary["trainingFinalRouteCounts"])), represented_population
+    )
+    final = largest_remainder_scale_counts(
+        tuple(cast(list[int], summary["finalGreedyRouteCounts"])), represented_population
+    )
+    social = game.social_cost(final)
+    return {
+        "seed": summary["seed"],
+        "trainingFinalRouteCounts": list(training),
+        "finalGreedyRouteCounts": list(final),
+        "physicalSocialCost": float(social),
+        "averagePhysicalLatency": float(social / represented_population),
+        "exploitability": float(game.exploitability(final)),
+        "distanceFromExactEquilibrium": normalized_count_distance(
+            final, exact.equilibria[0], represented_population
+        ),
+        "distanceFromSocialOptimum": normalized_count_distance(
+            final, exact.social_optima[0], represented_population
+        ),
+        "meanAverageExternalRegret": summary["meanAverageExternalRegret"],
+        "maximumAverageExternalRegret": summary["maximumAverageExternalRegret"],
+    }
+
+
+def _scaled_snapshot(
+    snapshot: dict[str, object], scenario: Scenario, represented_population: int
+) -> dict[str, object]:
+    game = BraessGame(scenario, represented_population)
+    counts = largest_remainder_scale_counts(
+        tuple(cast(list[int], snapshot["routeCounts"])), represented_population
+    )
+    return {
+        "episode": snapshot["episode"],
+        "epsilon": snapshot["epsilon"],
+        **_presentation_profile(game, counts),
+        "regret": snapshot["regret"],
+        "policyEntropy": snapshot["policyEntropy"],
+    }
+
+
+def _scaled_learning_block(
+    block: dict[str, object], scenario: Scenario, represented_population: int
+) -> dict[str, object]:
+    summaries = [
+        _scaled_summary(summary, scenario, represented_population)
+        for summary in cast(list[dict[str, object]], block["perSeedFinalSummaries"])
+    ]
+    representative = cast(dict[str, object], block["representative"])
+    return {
+        "learner": block["learner"],
+        "seedList": block["seedList"],
+        "representativeSelection": block["representativeSelection"],
+        "perSeedFinalSummaries": summaries,
+        "aggregate": aggregate_summaries(summaries),
+        "representative": {
+            "summary": _scaled_summary(
+                cast(dict[str, object], representative["summary"]),
+                scenario,
+                represented_population,
+            ),
+            "snapshots": [
+                _scaled_snapshot(snapshot, scenario, represented_population)
+                for snapshot in cast(list[dict[str, object]], representative["snapshots"])
+            ],
+            "learnerState": representative["learnerState"],
+        },
+        "runtime": block["runtime"],
+        "routeShareScaling": {
+            "method": "deterministic largest remainder with route-index tie breaking",
+            "representedPopulation": represented_population,
+            "simulatedLearners": simulated_learner_count(represented_population),
+            "costsRecomputedFromScaledIntegerCounts": True,
+        },
+    }
+
+
+@lru_cache(maxsize=1)
+def _sampled_population_learning() -> dict[str, object]:
+    """Run the shared deterministic 10,000-learner proxy once per export process."""
+
+    controls = experiment_config_for_population(100_000)
+    return run_q_learning_study(controls)
 
 
 def _comparison_payload(matrix: dict[str, object]) -> dict[str, object]:
@@ -404,9 +543,11 @@ def _comparison_payload(matrix: dict[str, object]) -> dict[str, object]:
 def build_population_bundle(
     population: int, config: ExperimentConfig | None = None
 ) -> dict[str, object]:
+    explicit_config = config is not None
     controls = config or experiment_config_for_population(population)
-    if controls.population != population:
-        raise ValueError("bundle and experiment populations differ")
+    simulated_learners = simulated_learner_count(population)
+    if controls.population != simulated_learners:
+        raise ValueError("bundle and simulated learner populations differ")
     comparison = None
     if population == POPULATION:
         matrix = run_experiment_matrix(controls)
@@ -415,14 +556,26 @@ def build_population_bundle(
             for scenario in Scenario
         }
         comparison = _comparison_payload(matrix)
-    else:
+    elif learning_study_kind(population) == "full-population":
         learning = run_q_learning_study(controls)
-    configuration = _configuration_payload(controls)
+    else:
+        raw_learning = (
+            run_q_learning_study(controls) if explicit_config else _sampled_population_learning()
+        )
+        learning = {
+            scenario.value: _scaled_learning_block(
+                cast(dict[str, object], raw_learning[scenario.value]), scenario, population
+            )
+            for scenario in Scenario
+        }
+    study = _learning_study_payload(population)
+    configuration = _configuration_payload(controls, population)
     configuration_hash = hashlib.sha256(deterministic_json_bytes(configuration)).hexdigest()[:16]
     bundle: dict[str, object] = {
         "schemaVersion": SCHEMA_VERSION,
         "modelIdentifier": MODEL_IDENTIFIER,
         "population": population,
+        "learningStudy": study,
         "waitingState": {
             "kind": "preExperiment",
             "waitingCount": population,
@@ -448,7 +601,11 @@ def build_population_bundle(
             }
             for scenario in Scenario
         },
-        "learning": {"configuration": configuration, "scenarios": learning},
+        "learning": {
+            "study": study,
+            "configuration": configuration,
+            "scenarios": learning,
+        },
         "potentialLandscape": build_potential_landscape(population, learning),
         "provenance": {
             "packageVersion": __version__,
@@ -468,18 +625,28 @@ def build_manifest() -> dict[str, object]:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "model": _shared_model_payload(),
-        "defaultPopulation": POPULATION,
+        "defaultPopulation": DEFAULT_STORY_POPULATION,
         "comparisonPopulation": POPULATION,
         "populations": [
             {
                 "agents": population,
                 "label": f"{population:,}",
-                "bundle": f"population-{population}-v2.json",
-                "visualBeadBudget": 100 if population == 100 else 180,
+                "bundle": f"population-{population}-v3.json",
+                "learningStudyKind": learning_study_kind(population),
+                "representedPopulation": population,
+                "simulatedLearners": simulated_learner_count(population),
+                "samplingDescription": _learning_study_payload(population)["samplingDescription"],
                 "study": (
                     "64-seed canonical study"
                     if population == 100
-                    else "one deterministic audited scale run per scenario"
+                    else (
+                        "one deterministic audited full-population run per scenario"
+                        if learning_study_kind(population) == "full-population"
+                        else (
+                            "one deterministic audited 10,000-learner sampled proxy per "
+                            "scenario with exact full-population analysis"
+                        )
+                    )
                 ),
             }
             for population in SUPPORTED_POPULATIONS
@@ -493,10 +660,10 @@ def export_population_data(output_directory: Path) -> dict[int, Path]:
 
     paths: dict[int, Path] = {}
     for population in SUPPORTED_POPULATIONS:
-        path = output_directory / f"population-{population}-v2.json"
+        path = output_directory / f"population-{population}-v3.json"
         write_deterministic_json(path, build_population_bundle(population))
         paths[population] = path
-    write_deterministic_json(output_directory / "manifest-v2.json", build_manifest())
+    write_deterministic_json(output_directory / "manifest-v3.json", build_manifest())
     return paths
 
 

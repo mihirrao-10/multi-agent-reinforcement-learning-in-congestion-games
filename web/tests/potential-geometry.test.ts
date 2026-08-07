@@ -18,10 +18,15 @@ describe("potential landscape topology", () => {
     const landscape = loadFixture().potentialLandscape;
     expect(
       landscape.markers.equilibria.map((marker) => marker.routeCounts),
-    ).toEqual([[0, 0, 100]]);
+    ).toEqual([
+      [0, 0, 100],
+      [0, 1, 99],
+      [1, 0, 99],
+      [1, 1, 98],
+    ]);
     expect(
       landscape.markers.optima.map((marker) => marker.routeCounts),
-    ).toEqual([[44, 44, 12]]);
+    ).toEqual([[50, 50, 0]]);
   });
 
   it("orients displayed strict-improvement arrows downhill", () => {
@@ -30,7 +35,7 @@ describe("potential landscape topology", () => {
         "braess-open-best-response"
       ]!;
     expect(arrowDirectionIsDescending(points)).toBe(true);
-    expect(points.at(-1)?.routeCounts).toEqual([0, 0, 100]);
+    expect(points.at(-1)?.routeCounts).toEqual([1, 1, 98]);
   });
 
   it("keeps exact markers separate from sampled large surfaces", () => {

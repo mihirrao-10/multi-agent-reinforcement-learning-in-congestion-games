@@ -15,14 +15,14 @@ from congestion_marl.types import Scenario
 def test_analysis_wrappers_preserve_exact_values() -> None:
     game = BraessGame(Scenario.OPEN)
     equilibrium = (0, 0, 100)
-    optimum = (44, 44, 12)
+    optimum = (50, 50, 0)
     assert cost_exploitability(game, equilibrium) == 0
     assert is_pure_nash(game, equilibrium)
-    assert rosenthal_potential(game, equilibrium) == 4040
-    assert perceived_potential(game, equilibrium) == 4040
-    assert physical_social_cost(game, optimum) == Fraction(32344, 5)
-    assert average_physical_latency(game, optimum) == Fraction(8086, 125)
-    assert normalized_count_distance(equilibrium, optimum, 100) == 0.88
+    assert rosenthal_potential(game, equilibrium) == 6060
+    assert perceived_potential(game, equilibrium) == 6060
+    assert physical_social_cost(game, optimum) == Fraction(9000)
+    assert average_physical_latency(game, optimum) == Fraction(90)
+    assert normalized_count_distance(equilibrium, optimum, 100) == 1.0
     require_finite([0.0, 1.0], "finite sample")
 
 

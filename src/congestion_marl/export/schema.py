@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-SCHEMA_VERSION = "2.0.0"
-MODEL_IDENTIFIER = "atomic-braess-population-normalized-v2"
+SCHEMA_VERSION = "3.0.0"
+MODEL_IDENTIFIER = "atomic-braess-60-minute-v3"
 ROUTE_CODES = {"0": "U", "1": "L", "2": "Z"}
 
 

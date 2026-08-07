@@ -16,12 +16,12 @@ export function createScenarioChart(
     { key: "braess-closed" as const, label: "removed" },
     { key: "braess-tolled" as const, label: "tolled" },
   ];
-  const y = linearScale([60, 82], [height - 38, 18]);
+  const y = linearScale([85, 125], [height - 38, 18]);
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}` });
   appendTitleAndDescription(
     svg,
     "Exact and learned latency by incentive scenario",
-    "Each group separates exact equilibrium, representative Q-learning greedy evaluation, and physical optimum average latency.",
+    "Each group separates exact equilibrium, representative Q-learning greedy evaluation, and physical optimum average latency in minutes.",
   );
   scenarios.forEach((scenario, scenarioIndex) => {
     const exact = story.exactAnalysis[scenario.key];
@@ -38,7 +38,7 @@ export function createScenarioChart(
       const line = svgElement("line", {
         x1: x,
         x2: x,
-        y1: y(60),
+        y1: y(85),
         y2: y(value),
         stroke:
           valueIndex === 0

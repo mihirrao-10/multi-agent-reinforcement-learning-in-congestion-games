@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import cast
 
 from congestion_marl.analysis.enumeration import analyze_scenario
-from congestion_marl.config import POPULATION, SUPPORTED_POPULATIONS
+from congestion_marl.config import (
+    DEFAULT_STORY_POPULATION,
+    POPULATION,
+    SAMPLED_STUDY_POPULATIONS,
+    SUPPORTED_POPULATIONS,
+    learning_study_kind,
+    simulated_learner_count,
+)
 from congestion_marl.export.schema import MODEL_IDENTIFIER, SCHEMA_VERSION
 from congestion_marl.games.braess import BraessGame
 from congestion_marl.types import Scenario
@@ -145,32 +152,68 @@ def _validate_exact(exact: Mapping[str, object], population: int) -> None:
         tolled_block = cast(Mapping[str, object], exact[Scenario.TOLLED.value])
         open_equilibrium = cast(list[Mapping[str, object]], open_block["pureNashEquilibria"])[0]
         open_optimum = cast(list[Mapping[str, object]], open_block["socialOptima"])[0]
-        _require(open_equilibrium["routeCounts"] == [0, 0, 100], "default equilibrium disagrees")
-        _require(open_optimum["routeCounts"] == [44, 44, 12], "default optimum disagrees")
         _require(
-            _exact_decimal(open_optimum, "physicalSocialCost") == 6468.8,
-            "default optimum cost disagrees",
+            [
+                profile["routeCounts"]
+                for profile in cast(list[Mapping[str, object]], open_block["pureNashEquilibria"])
+            ]
+            == [[0, 0, 100], [0, 1, 99], [1, 0, 99], [1, 1, 98]],
+            "canonical equilibrium set disagrees",
+        )
+        _require(
+            open_equilibrium["routeCounts"] == [0, 0, 100], "canonical story equilibrium disagrees"
+        )
+        _require(open_optimum["routeCounts"] == [50, 50, 0], "canonical optimum disagrees")
+        _require(
+            _exact_decimal(open_optimum, "physicalSocialCost") == 9000,
+            "canonical optimum cost disagrees",
         )
         _require(
             cast(list[Mapping[str, object]], closed_block["pureNashEquilibria"])[0]["routeCounts"]
             == [50, 50],
-            "default closed split disagrees",
+            "canonical closed split disagrees",
         )
         _require(
             cast(list[Mapping[str, object]], tolled_block["pureNashEquilibria"])[0]["routeCounts"]
-            == [44, 44, 12],
-            "default tolled split disagrees",
+            == [50, 50, 0],
+            "canonical tolled split disagrees",
         )
         poa = cast(Mapping[str, object], open_block["priceOfAnarchy"])
         _require(
-            (poa["numerator"], poa["denominator"]) == (5000, 4043),
-            "default Price of Anarchy disagrees",
+            (poa["numerator"], poa["denominator"]) == (4, 3),
+            "canonical Price of Anarchy disagrees",
         )
 
 
+def _validate_learning_study(study: Mapping[str, object], population: int) -> None:
+    kind = learning_study_kind(population)
+    simulated = simulated_learner_count(population)
+    _require(study.get("learningStudyKind") == kind, "learning-study kind is dishonest")
+    _require(
+        study.get("representedPopulation") == population,
+        "represented learning population disagrees",
+    )
+    _require(study.get("simulatedLearners") == simulated, "simulated learner count disagrees")
+    description = study.get("samplingDescription")
+    _require(isinstance(description, str) and bool(description), "sampling description is missing")
+    if population in SAMPLED_STUDY_POPULATIONS:
+        _require(simulated < population, "sampled study does not reduce the learner population")
+    else:
+        _require(simulated == population, "full-population study omits represented learners")
+
+
 def _validate_learning(learning: Mapping[str, object], population: int) -> None:
+    study = cast(Mapping[str, object], learning["study"])
+    _validate_learning_study(study, population)
     configuration = cast(Mapping[str, object], learning["configuration"])
-    _require(configuration["agents"] == population, "learning population disagrees")
+    for key in (
+        "learningStudyKind",
+        "representedPopulation",
+        "simulatedLearners",
+        "samplingDescription",
+    ):
+        _require(configuration.get(key) == study.get(key), f"configuration {key} disagrees")
+    simulated_learners = simulated_learner_count(population)
     scenarios = cast(Mapping[str, object], learning["scenarios"])
     for scenario in Scenario:
         game = BraessGame(scenario, population)
@@ -181,6 +224,8 @@ def _validate_learning(learning: Mapping[str, object], population: int) -> None:
         summary = cast(Mapping[str, object], representative["summary"])
         final_counts = tuple(cast(list[int], summary["finalGreedyRouteCounts"]))
         game.validate_counts(final_counts)
+        training_counts = tuple(cast(list[int], summary["trainingFinalRouteCounts"]))
+        game.validate_counts(training_counts)
         _require("finalGreedyAssignments" not in summary, "large final assignments are forbidden")
         _require(
             math.isclose(
@@ -189,9 +234,21 @@ def _validate_learning(learning: Mapping[str, object], population: int) -> None:
             ),
             "final exploitability disagrees",
         )
+        social = float(game.social_cost(final_counts))
+        _require(
+            math.isclose(_number(summary["physicalSocialCost"], "final social cost"), social),
+            "final social cost disagrees",
+        )
+        _require(
+            math.isclose(
+                _number(summary["averagePhysicalLatency"], "final average latency"),
+                social / population,
+            ),
+            "final average latency disagrees",
+        )
         state = cast(Mapping[str, object], representative["learnerState"])
         _require(
-            state.get("qValueShape") == [population, len(game.routes)],
+            state.get("qValueShape") == [simulated_learners, len(game.routes)],
             "public Q-value shape disagrees",
         )
         previous = 0
@@ -206,6 +263,24 @@ def _validate_learning(learning: Mapping[str, object], population: int) -> None:
         if population > POPULATION:
             _require(len(seeds) == 1, "large-population study must be labeled as one run")
             _require(len(snapshots) <= 140, "large-population trajectory was not thinned")
+        if population in SAMPLED_STUDY_POPULATIONS:
+            raw_scaling = block.get("routeShareScaling")
+            _require(isinstance(raw_scaling, Mapping), "sampled route scaling metadata is missing")
+            scaling = cast(Mapping[str, object], raw_scaling)
+            _require(
+                scaling.get("representedPopulation") == population,
+                "sampled route scaling population disagrees",
+            )
+            _require(
+                scaling.get("simulatedLearners") == simulated_learners,
+                "sampled route scaling learner count disagrees",
+            )
+            _require(
+                scaling.get("costsRecomputedFromScaledIntegerCounts") is True,
+                "sampled costs were not recomputed from represented counts",
+            )
+        else:
+            _require("routeShareScaling" not in block, "full-population study is labeled sampled")
 
 
 def _validate_scenario_states(states: Mapping[str, object], population: int) -> None:
@@ -290,6 +365,36 @@ def _validate_landscape(landscape: Mapping[str, object], population: int) -> Non
     _require(game.is_pure_nash(best_path[-1]), "best-response path misses equilibrium")
     audit = cast(Mapping[str, object], landscape["bestResponseAudit"])
     _require(audit["rawPathValidated"] is True, "raw best-response path was not validated")
+    path_population = population
+    _require(audit.get("pathPopulation") == path_population, "path population disagrees")
+    _require(
+        audit.get("representedPopulation") == population,
+        "represented path population disagrees",
+    )
+    _require(
+        audit.get("scaledForDisplay") is (path_population != population),
+        "path scaling disclosure disagrees",
+    )
+    _require(
+        audit.get("everyMoveIsOneAgent") is (path_population == population),
+        "represented one-agent path claim disagrees",
+    )
+    _require(
+        audit.get("everySimulatedMoveIsOneLearner") is True,
+        "simulated one-learner path audit failed",
+    )
+    _require(
+        audit.get("simulatedPotentialStrictlyDecreasing") is True,
+        "simulated path potential audit failed",
+    )
+    _require(
+        audit.get("renderedPointCount") == len(best_path),
+        "rendered path point count disagrees",
+    )
+    _require(
+        _integer(audit["rawStepCount"], "raw path step count") >= len(best_path),
+        "raw path is shorter than the rendered path",
+    )
     if population > POPULATION:
         _require(
             sampling["mode"] == "deterministic-barycentric-sample",
@@ -302,10 +407,24 @@ def validate_manifest(payload: Mapping[str, object]) -> None:
     _require(payload.get("schemaVersion") == SCHEMA_VERSION, "unsupported manifest schema")
     model = cast(Mapping[str, object], payload.get("model"))
     _require(model.get("identifier") == MODEL_IDENTIFIER, "unexpected model identifier")
-    _require(payload.get("defaultPopulation") == POPULATION, "default population disagrees")
+    _require(
+        payload.get("defaultPopulation") == DEFAULT_STORY_POPULATION,
+        "default population disagrees",
+    )
+    _require(payload.get("comparisonPopulation") == POPULATION, "comparison population disagrees")
     populations = cast(list[Mapping[str, object]], payload["populations"])
     exported = tuple(_integer(item["agents"], "population") for item in populations)
     _require(exported == SUPPORTED_POPULATIONS, "public population options disagree")
+    for item, population in zip(populations, SUPPORTED_POPULATIONS, strict=True):
+        _require(
+            item.get("bundle") == f"population-{population}-v3.json",
+            "manifest bundle filename disagrees",
+        )
+        _validate_learning_study(item, population)
+        _require(
+            not any(key.startswith("visual") and key.endswith("Budget") for key in item),
+            "obsolete visual rendering metadata remains",
+        )
     _finite_tree(payload)
 
 
@@ -316,6 +435,8 @@ def validate_story(payload: Mapping[str, object]) -> None:
     _require(payload.get("modelIdentifier") == MODEL_IDENTIFIER, "unexpected model identifier")
     population = _integer(payload.get("population"), "population")
     _require(population in SUPPORTED_POPULATIONS, "unsupported bundle population")
+    study = cast(Mapping[str, object], payload["learningStudy"])
+    _validate_learning_study(study, population)
     waiting = cast(Mapping[str, object], payload["waitingState"])
     _require(waiting.get("kind") == "preExperiment", "waiting state kind disagrees")
     _require(waiting.get("waitingCount") == population, "waiting count disagrees")
@@ -327,7 +448,9 @@ def validate_story(payload: Mapping[str, object]) -> None:
     _finite_tree(payload)
     _validate_exact(cast(Mapping[str, object], payload["exactAnalysis"]), population)
     _validate_scenario_states(cast(Mapping[str, object], payload["scenarioStates"]), population)
-    _validate_learning(cast(Mapping[str, object], payload["learning"]), population)
+    learning = cast(Mapping[str, object], payload["learning"])
+    _require(learning.get("study") == study, "bundle learning-study metadata disagrees")
+    _validate_learning(learning, population)
     _validate_landscape(cast(Mapping[str, object], payload["potentialLandscape"]), population)
     _require(
         ("comparison" in payload) == (population == POPULATION),
@@ -350,11 +473,11 @@ def validate_story_file(path: str) -> dict[str, object]:
 
 def validate_export_directory(path: str | Path) -> dict[int, dict[str, object]]:
     directory = Path(path)
-    manifest = _load_object(directory / "manifest-v2.json")
+    manifest = _load_object(directory / "manifest-v3.json")
     validate_manifest(manifest)
     result: dict[int, dict[str, object]] = {}
     for population in SUPPORTED_POPULATIONS:
-        payload = _load_object(directory / f"population-{population}-v2.json")
+        payload = _load_object(directory / f"population-{population}-v3.json")
         validate_story(payload)
         result[population] = payload
     return result

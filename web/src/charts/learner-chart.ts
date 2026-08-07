@@ -45,13 +45,13 @@ export function createLearnerChart(
     y: 20,
     class: "chart-axis",
   });
-  socialLabel.textContent = `social cost (${minimumCost} to ${maximumCost})`;
+  socialLabel.textContent = `social cost in commuter-minutes (${minimumCost} to ${maximumCost})`;
   const exploitLabel = svgElement("text", {
     x: 370,
     y: 20,
     class: "chart-axis",
   });
-  exploitLabel.textContent = `exploitability (0 to ${maximumExploitability})`;
+  exploitLabel.textContent = `exploitability in minutes (0 to ${maximumExploitability})`;
   svg.append(socialLabel, exploitLabel);
   learners.forEach((learner, index) => {
     const y = 62 + index * 54;

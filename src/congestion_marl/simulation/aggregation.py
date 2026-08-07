@@ -8,6 +8,30 @@ from typing import cast
 import numpy as np
 
 from congestion_marl.simulation.engine import LearningRun
+from congestion_marl.types import CountState
+
+
+def largest_remainder_scale_counts(counts: CountState, represented_population: int) -> CountState:
+    """Scale route shares to exact deterministic represented-population counts."""
+
+    simulated_population = sum(counts)
+    if simulated_population <= 0 or represented_population <= 0:
+        raise ValueError("simulated and represented populations must be positive")
+    if any(count < 0 for count in counts):
+        raise ValueError("route counts must be nonnegative")
+    numerators = [count * represented_population for count in counts]
+    scaled = [numerator // simulated_population for numerator in numerators]
+    remaining = represented_population - sum(scaled)
+    order = sorted(
+        range(len(counts)),
+        key=lambda index: (-(numerators[index] % simulated_population), index),
+    )
+    for index in order[:remaining]:
+        scaled[index] += 1
+    result = tuple(scaled)
+    if sum(result) != represented_population:
+        raise AssertionError("largest-remainder scaling lost represented commuters")
+    return result
 
 
 def select_representative_run(runs: Sequence[LearningRun]) -> LearningRun:

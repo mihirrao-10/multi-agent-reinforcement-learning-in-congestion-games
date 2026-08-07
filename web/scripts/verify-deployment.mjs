@@ -62,7 +62,11 @@ async function proceed(page, act) {
 }
 
 async function runLearning(page, expectedCounts) {
-  await page.getByRole("button", { name: /^Run learning with/ }).click();
+  await page
+    .getByRole("button", {
+      name: /^Run (?:learning with|sampled learning path for)/,
+    })
+    .click();
   await page.waitForFunction(
     () =>
       document.querySelector("#stage")?.getAttribute("data-learning-state") ===
@@ -89,7 +93,7 @@ async function selectPopulation(page, population) {
 
 try {
   const desktop = await browser.newContext({
-    viewport: { width: 1440, height: 1000 },
+    viewport: { width: 1440, height: 900 },
     reducedMotion: "reduce",
   });
   const page = await desktop.newPage();
@@ -107,8 +111,8 @@ try {
 
   const initial = await page.evaluate(async () => {
     const [manifestResponse, bundleResponse] = await Promise.all([
-      fetch("data/manifest-v2.json", { cache: "no-store" }),
-      fetch("data/population-100-v2.json", { cache: "no-store" }),
+      fetch("data/manifest-v3.json", { cache: "no-store" }),
+      fetch("data/population-100000-v3.json", { cache: "no-store" }),
     ]);
     const manifest = await manifestResponse.json();
     const bundle = await bundleResponse.json();
@@ -131,13 +135,13 @@ try {
   });
   if (
     initial.title !== "When Every Agent Finds the Shortcut" ||
-    initial.visibleOpeningChildren !== 2 ||
+    initial.visibleOpeningChildren !== 3 ||
     !initial.mainHidden ||
     !initial.scrollLocked ||
     initial.manifestStatus !== 200 ||
     initial.bundleStatus !== 200 ||
-    initial.manifestSchema !== "2.0.0" ||
-    initial.population !== 100
+    initial.manifestSchema !== "3.0.0" ||
+    initial.population !== 100000
   ) {
     throw new Error(
       `invalid deployed opening state: ${JSON.stringify(initial)}`,
@@ -146,8 +150,10 @@ try {
   if (
     initial.resources.some(
       (name) =>
-        name.includes("population-1000-v2") ||
-        name.includes("population-10000-v2"),
+        name.includes("population-100-v3") ||
+        name.includes("population-1000-v3") ||
+        name.includes("population-10000-v3") ||
+        name.includes("population-1000000-v3"),
     )
   ) {
     throw new Error("scale bundles were fetched before selection");
@@ -190,14 +196,40 @@ try {
   await proceed(page, 0);
   await proceed(page, 1);
   await proceed(page, 2);
-  await runLearning(page, "0,0,100");
+  await runLearning(page, "2580,2570,94850");
 
+  await selectPopulation(page, 100);
+  await runLearning(page, "23,20,57");
   await selectPopulation(page, 1000);
-  await runLearning(page, "7,9,984");
+  await runLearning(page, "61,68,871");
   await selectPopulation(page, 10000);
   await runLearning(page, "258,257,9485");
+  await selectPopulation(page, 100000);
+  if (
+    (await stage.getAttribute("data-learning-study-kind")) !==
+      "sampled-population-proxy" ||
+    (await stage.getAttribute("data-simulated-learners")) !== "10000"
+  ) {
+    throw new Error("100,000-commuter sampled-study disclosure is missing");
+  }
+  await runLearning(page, "2580,2570,94850");
+  await page.screenshot({
+    path: resolve(outputDirectory, "desktop-population-100000.png"),
+  });
+  await selectPopulation(page, 1000000);
+  if (
+    (await stage.getAttribute("data-learning-study-kind")) !==
+      "sampled-population-proxy" ||
+    (await stage.getAttribute("data-represented-population")) !== "1000000"
+  ) {
+    throw new Error("1,000,000-commuter sampled-study disclosure is missing");
+  }
+  await runLearning(page, "25800,25700,948500");
+  await page.screenshot({
+    path: resolve(outputDirectory, "desktop-population-1000000.png"),
+  });
   await selectPopulation(page, 100);
-  await runLearning(page, "0,0,100");
+  await runLearning(page, "23,20,57");
 
   await proceed(page, 3);
   if (
@@ -210,7 +242,8 @@ try {
   await proceed(page, 4);
   if (
     (await stage.getAttribute("data-route-counts")) !== "0,0,100" ||
-    (await page.locator("#metric-exploitability").textContent())?.trim() !== "0"
+    (await page.locator("#metric-exploitability").textContent())?.trim() !==
+      "0 minutes"
   ) {
     throw new Error("deployed equilibrium chapter has stale metrics");
   }
@@ -224,7 +257,7 @@ try {
   await proceed(page, 6);
   if (
     (await stage.getAttribute("data-scenario")) !== "braess-tolled" ||
-    (await stage.getAttribute("data-route-counts")) !== "44,44,12" ||
+    (await stage.getAttribute("data-route-counts")) !== "50,50,0" ||
     (await stage.getAttribute("data-surface")) !== "physical-social-cost"
   ) {
     throw new Error("deployed tolled state is incorrect");
@@ -244,14 +277,14 @@ try {
   if (
     !(await page.locator("#opening-screen").isVisible()) ||
     (await page.locator("body").getAttribute("data-bundle-population")) !==
-      "100"
+      "100000"
   ) {
     throw new Error("deployed replay did not restore the default title state");
   }
   if (failures.length > 0) {
     throw new Error(`desktop runtime failures: ${failures.join("; ")}`);
   }
-  report.push({ viewport: "desktop-1440x1000", initial, status: "verified" });
+  report.push({ viewport: "desktop-1440x900", initial, status: "verified" });
   await desktop.close();
 
   const mobile = await browser.newContext({
@@ -286,7 +319,7 @@ try {
   await proceed(mobilePage, 0);
   await proceed(mobilePage, 1);
   await proceed(mobilePage, 2);
-  await runLearning(mobilePage, "0,0,100");
+  await runLearning(mobilePage, "2580,2570,94850");
   for (let act = 3; act <= 9; act += 1) await proceed(mobilePage, act);
   const mobileCompletion = await mobilePage.evaluate(() => ({
     activeAct: document.querySelector("#stage")?.getAttribute("data-story-act"),
@@ -330,7 +363,8 @@ try {
     (await fallbackPage.locator("body").getAttribute("data-webgl")) !==
       "fallback" ||
     !(await fallbackPage.locator("#webgl-fallback").isVisible()) ||
-    (await fallbackPage.locator(".fallback-beads circle").count()) !== 100
+    (await fallbackPage.locator(".fallback-flow-bodies path").count()) !== 5 ||
+    (await fallbackPage.locator(".fallback-node-cores circle").count()) !== 4
   ) {
     throw new Error("deployed SVG fallback did not preserve the waiting state");
   }
@@ -341,7 +375,7 @@ try {
   await proceed(fallbackPage, 1);
   await proceed(fallbackPage, 2);
   await selectPopulation(fallbackPage, 1000);
-  await runLearning(fallbackPage, "7,9,984");
+  await runLearning(fallbackPage, "61,68,871");
   await proceed(fallbackPage, 3);
   await proceed(fallbackPage, 4);
   await proceed(fallbackPage, 5);
@@ -354,7 +388,7 @@ try {
   await proceed(fallbackPage, 6);
   if (
     (await fallbackPage.locator("#stage").getAttribute("data-route-counts")) !==
-    "437,437,126"
+    "500,500,0"
   ) {
     throw new Error("deployed fallback tolled scenario is incorrect");
   }

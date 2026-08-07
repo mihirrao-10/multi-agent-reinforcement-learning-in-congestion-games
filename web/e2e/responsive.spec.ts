@@ -9,9 +9,11 @@ import {
 } from "./helpers";
 
 const viewports = [
-  { name: "desktop-1440x1000", width: 1440, height: 1000, stacked: false },
+  { name: "desktop-1440x900", width: 1440, height: 900, stacked: false },
   { name: "desktop-1280x800", width: 1280, height: 800, stacked: false },
-  { name: "tablet-768x1024", width: 768, height: 1024, stacked: true },
+  { name: "desktop-1024x768", width: 1024, height: 768, stacked: false },
+  { name: "tablet-820x1180", width: 820, height: 1180, stacked: true },
+  { name: "mobile-430x932", width: 430, height: 932, stacked: true },
   { name: "mobile-390x844", width: 390, height: 844, stacked: true },
 ] as const;
 
@@ -74,7 +76,7 @@ for (const viewport of viewports) {
     expect(layout.canvasHeight).toBeGreaterThanOrEqual(
       viewport.width <= 560 ? 270 : 290,
     );
-    if (viewport.width === 390) {
+    if (viewport.width <= 560) {
       expect(layout.visualPosition).toBe("relative");
       const heights = await page
         .locator("button:visible")
@@ -82,17 +84,35 @@ for (const viewport of viewports) {
           buttons.map((button) => button.getBoundingClientRect().height),
         );
       expect(Math.min(...heights)).toBeGreaterThanOrEqual(44);
+      const populationAudit = await page
+        .locator(".population-control")
+        .evaluate((control) => {
+          const rectangle = control.getBoundingClientRect();
+          const buttons = [...control.querySelectorAll("button")].map(
+            (button) => {
+              const bounds = button.getBoundingClientRect();
+              return bounds.left >= 0 && bounds.right <= innerWidth;
+            },
+          );
+          return {
+            inside: rectangle.left >= 0 && rectangle.right <= innerWidth,
+            buttonsInside: buttons.every(Boolean),
+          };
+        });
+      expect(populationAudit).toEqual({ inside: true, buttonsInside: true });
       await page.screenshot({
-        path: "e2e/screenshots/mobile-first-post-start.png",
+        path: `e2e/screenshots/${viewport.name}-first-post-start.png`,
       });
-      await unlockThrough(page, 10);
-      await expect(
-        page.getByRole("heading", { name: "Under the hood" }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("heading", { name: "Under the hood" }),
-      ).toBeInViewport();
-      await expectNoHorizontalOverflow(page);
+      if (viewport.width === 390) {
+        await unlockThrough(page, 10);
+        await expect(
+          page.getByRole("heading", { name: "Under the hood" }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("heading", { name: "Under the hood" }),
+        ).toBeInViewport();
+        await expectNoHorizontalOverflow(page);
+      }
     }
     await page.screenshot({ path: `e2e/screenshots/${viewport.name}.png` });
     expect(errors).toEqual([]);

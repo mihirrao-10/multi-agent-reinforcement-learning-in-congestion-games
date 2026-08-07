@@ -35,7 +35,7 @@ export function createLearningChart(
   appendTitleAndDescription(
     svg,
     "Independent Q-learning latency over exact exported episodes",
-    `Average physical latency evolves through training. Reference lines mark Nash latency ${equilibriumAverage} and optimum latency ${optimumAverage}.`,
+    `Average physical latency in minutes evolves through training. Reference lines mark Nash latency ${equilibriumAverage} minutes and optimum latency ${optimumAverage} minutes.`,
   );
   for (const value of [optimumAverage, equilibriumAverage]) {
     svg.append(
@@ -75,7 +75,7 @@ export function createLearningChart(
     y: 11,
     class: "chart-axis",
   });
-  latencyLabel.textContent = "average physical latency";
+  latencyLabel.textContent = "average physical latency (minutes)";
   const equilibriumLabel = svgElement("text", {
     x: width - margin.right,
     y: y(equilibriumAverage) - 4,

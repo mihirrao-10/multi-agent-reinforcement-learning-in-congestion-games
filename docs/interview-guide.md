@@ -2,7 +2,7 @@
 
 ## Thirty-second explanation
 
-The project studies a finite Braess congestion game with independent tabular learners. Every agent can learn the privately attractive Shortcut correctly, yet the resulting exact equilibrium makes average latency 80 instead of the optimum 64.688. Removing the Shortcut lowers equilibrium latency to 65, while a discrete marginal-cost toll aligns private incentives with physical social cost. The public experience supports 100, 1,000, and 10,000 agents using exact population-specific analysis and separately computed trajectories.
+The project studies a finite Braess congestion game as a repeated daily commute with independent tabular learners. Every commuter can learn the privately attractive Shortcut correctly, yet the resulting all-Shortcut equilibrium has average latency 120 minutes instead of the optimum 90. Removing the Shortcut restores the 90-minute outcome, while a discrete marginal-cost toll aligns private incentives with physical social cost. The public experience supports 100, 1,000, 10,000, 100,000, and 1,000,000 commuters with exact full-population analysis and honestly labeled full or sampled learning studies.
 
 The main lesson is that better learning does not repair a badly designed objective.
 
@@ -12,32 +12,32 @@ Four boundaries are explicit:
 
 1. Exact game-theoretic claims use rational arithmetic and remove-then-add deviations.
 2. Learner outcomes remain empirical and include their seed and information assumptions.
-3. Large-population analysis exploits discrete convexity instead of enumerating 50 million states.
+3. Large-population analysis uses constant-size exact convex candidate sets instead of enumerating as many as 500,001,500,001 states.
 4. The browser presents validated Python outputs and never trains agents or manufactures population results.
 
 ## Explain the model
 
-There are `N` labeled atomic agents. Each chooses Upper, Lower, or Shortcut as one complete action. The variable edges use `40x/N`; the outer constant edges cost 45; the central edge costs zero. For counts `(x_U, x_L, x_Z)`:
+There are `N` labeled atomic agents. Each chooses Upper, Lower, or Shortcut as one complete action. The variable edges use `60x/N` minutes; the outer constant edges cost 60 minutes; the central edge costs zero. For counts `(x_U, x_L, x_Z)`:
 
 ```text
-J_U = 40(x_U + x_Z)/N + 45
-J_L = 45 + 40(x_L + x_Z)/N
-J_Z = 40(x_U + x_Z)/N + 40(x_L + x_Z)/N.
+J_U = 60(x_U + x_Z)/N + 60
+J_L = 60 + 60(x_L + x_Z)/N
+J_Z = 60(x_U + x_Z)/N + 60(x_L + x_Z)/N.
 ```
 
 The normalization preserves the same intended Braess structure at every supported population.
 
-## Why does every agent use the Shortcut at equilibrium?
+## Why is all Shortcut an equilibrium?
 
-At `(0, 0, N)`, every agent pays 80. If one agent moves to Upper, remove that agent from Shortcut first. The candidate then pays
+At `(0, 0, N)`, every agent pays 120 minutes. If one agent moves to Upper, remove that agent from Shortcut first. The commuter still uses `S -> U`, so that edge's load remains `N`. The candidate then pays
 
 ```text
-40(N - 1)/N + 45,
+60N/N + 60 = 120.
 ```
 
-which is greater than 80 for the supported populations. Lower is symmetric. No unilateral switch helps, so all Shortcut is a pure Nash equilibrium.
+Lower is symmetric. No unilateral switch strictly helps, so all Shortcut is a weak pure Nash equilibrium.
 
-At `N = 100`, total physical cost is 8,000. The exact physical optimum `(44, 44, 12)` costs 6,468.8. Price of Anarchy is `5000/4043`.
+At `N = 100`, total physical cost is 12,000 commuter-minutes. The exact physical optimum `(50, 50, 0)` costs 9,000 commuter-minutes. Price of Anarchy is `4/3`. The exact finite weak-equilibrium set is `(0, 0, 100)`, `(0, 1, 99)`, `(1, 0, 99)`, and `(1, 1, 98)`, so the project never claims uniqueness.
 
 ## Why remove before adding?
 
@@ -51,23 +51,23 @@ before evaluating candidate cost. This same accounting is used for equilibrium, 
 
 ## How can 10,000-agent analysis remain exact?
 
-The open social objective and Rosenthal potential each separate as `f(x_U) + f(x_L)` for an exact discrete-convex component. Scanning one component over `0..N` finds every component minimum. Feasible pairs give every optimum, and potential minima give every equilibrium. The closed game needs only one scan.
+The open social objective and Rosenthal potential each separate as `f(x_U) + f(x_L)` for an exact discrete-convex component. The social component is centered at `N/2`; the untolled potential component has equal discrete minima at zero and one. The closed and tolled centers are `N/2`. Checking floor, ceiling, adjacent integers, and boundaries finds every discrete tie with constant work. Feasible pairs give every optimum, and potential minima give every equilibrium.
 
-This exact `O(N)` routine is exhaustively compared with complete enumeration at multiple small populations. The analyzer can report that the 10,000-agent game has 50,015,001 open count states without constructing them.
+This constant-size routine is exhaustively compared with complete enumeration at multiple small populations and with a linear reference scan over a broad medium range. The analyzer can report that the 1,000,000-commuter game has 500,001,500,001 open count states without constructing them.
 
 The browser surface is deliberately different: it uses a fixed 2,145-vertex sample of the exact potential formula. Exact equilibrium, optimum, active-profile, and path markers are not snapped to that sample.
 
 ## What does Q-learning do?
 
-Each agent owns a separate Q row and receives only experienced selected-route reward. All agents choose before rewards are evaluated, then update only the selected entry:
+Each learner owns a separate Q row and receives only experienced selected-route reward. One episode is one new morning commute. All learners choose before rewards are evaluated, then update only the selected entry:
 
 ```text
 Q_i(a_i) <- Q_i(a_i) + 0.15 [r_i - Q_i(a_i)].
 ```
 
-The other learners make each agent's environment nonstationary. The project therefore does not transfer the standard single-agent Q-learning convergence theorem. It reports observed training paths and a separate epsilon-zero final evaluation.
+The other learners make each learner's environment nonstationary. The project therefore does not transfer the standard single-agent Q-learning convergence theorem. It reports observed training paths and a separate epsilon-zero final evaluation. The learners do not meet, communicate, exchange Q-values, or see one another's private route estimates. They affect one another only because their independently chosen routes create shared congestion.
 
-The canonical 100-agent study uses 64 Q seeds per scenario and 5,000 episodes. The 1,000- and 10,000-agent presets use one declared audited vectorized run per scenario, with 3,200 and 2,400 episodes. Their uncertainty is not compared with the replicated study.
+The canonical 100-commuter study uses 64 Q seeds per scenario and 5,000 episodes. The 1,000- and 10,000-commuter presets use one declared audited full-population vectorized run per scenario, with 3,200 and 2,400 episodes. The 100,000 and 1,000,000 presets use one shared, declared 10,000-learner sampled route-share study. Their uncertainty is not compared with the replicated study.
 
 ## Why include best response and Hedge?
 
@@ -81,10 +81,10 @@ The comparison is not a leaderboard because the feedback assumptions differ.
 
 ## How do the tolls work?
 
-For `c_N(x) = 40x/N`, the variable edges receive
+For `c_N(x) = 60x/N`, the variable edges receive
 
 ```text
-tau_N(x) = (x - 1)[c_N(x) - c_N(x - 1)] = 40(x - 1)/N.
+tau_N(x) = (x - 1)[c_N(x) - c_N(x - 1)] = 60(x - 1)/N.
 ```
 
 Then perceived edge cost telescopes:
@@ -101,23 +101,23 @@ NumPy `SeedSequence` derives run seeds from base seed `20260804`. Every run then
 
 ## How is the public data honest at scale?
 
-The page initially loads a manifest and the 100-agent bundle. The larger bundles are fetched only when selected. They contain actual selected-population Q-learning snapshots and exact selected-population profiles. They do not contain copied route-share curves, population-sized assignment arrays, or millions of landscape vertices.
+The page initially loads a manifest and the default 100,000-commuter bundle. Other population bundles are fetched only when selected and then cached; the replicated 100-commuter comparison loads only when its chapter is reached. The first three presets contain full-population Q-learning snapshots. The two largest contain sampled-study snapshots scaled by deterministic largest remainder to integer represented-population counts. Costs and loads are recomputed from those scaled counts. Every bundle still contains exact full-population equilibrium, optimum, potential, and welfare analysis.
 
-The renderer uses one bead per agent at 100. Larger presets cap visible beads at 180 and assign exact integer weights by deterministic largest remainder. The legend states the approximate bead weight, while all metrics retain exact route counts.
+The renderer draws continuous translucent directional flow. Nonlinear thickness, hue, and opacity all increase monotonically with traffic share from thin green to thick red. Broad moving light supplies a fluid-looking direction cue. Enlarged white-glowing nodes preserve the four junction identities. No individual commuter symbol is used, so rendering complexity does not imply a simulated population size.
 
 ## Why the guided Start and Proceed flow?
 
-The initial waiting state prevents an unexplained episode counter and arbitrary profile from appearing as fact. Start opens only the question. Proceed introduces a route as an action, then congestion and reward, then the independent Q update. Learning requires a separate `Run learning with N agents` action. Metrics appear only after they have meaning, and exploitability waits until the equilibrium chapter.
+The initial waiting state prevents an unexplained episode counter and arbitrary profile from appearing as fact. Start opens only the question. Proceed introduces a route as an action, then congestion and reward, then the independent Q update. Learning requires a separate `Run learning with N commuters` action. The two sampled presets say `Run sampled learning path` and disclose 10,000 simulated learners beside the full represented population. Metrics appear only after they have meaning, and exploitability waits until the equilibrium chapter.
 
-Locked chapters are truly hidden and absent from accessibility navigation. Population changes reset only playback, retain already unlocked explanations, and never mix metrics across bundles. Full replay returns to the title, 100 agents, waiting state, first chapter, and authored camera.
+Locked chapters are truly hidden and absent from accessibility navigation. Population changes reset only playback, retain already unlocked explanations, and never mix metrics across bundles. Full replay returns to the title, the default 100,000 commuters, waiting state, first chapter, and authored camera.
 
 ## How was the interface verified?
 
 - Python formatting, lint, strict typing, coverage, exact-model, learner, determinism, export, and performance checks.
 - TypeScript strict compilation, ESLint, Zod validation, numerical re-derivation, and Vitest state and geometry tests.
-- Chromium Playwright journeys at 1440, 1280, tablet, and mobile widths.
+- Chromium Playwright journeys at `1440x900`, `1280x800`, `1024x768`, `820x1180`, `430x932`, and `390x844`.
 - Keyboard, reduced motion, trackpad-equivalent wheel, pointer orbit, lazy population loading, SVG fallback, and replay checks.
-- Screenshot inspection of every major narrative state and both scale cohorts.
+- Screenshot inspection of every major narrative state, varied traffic shares, and all audited population scales.
 - Production base-path and deployed-asset verification on GitHub Pages.
 
 ## Limitations to state plainly
@@ -129,7 +129,7 @@ Locked chapters are truly hidden and absent from accessibility navigation. Popul
 - The larger studies have one run per scenario and do not estimate uncertainty.
 - Hedge and best response receive stronger feedback than Q-learning.
 - Toll conclusions belong to this authored objective and are not policy advice.
-- Particle motion is an encoding of assignment and relative latency, not a traffic forecast.
+- Directional flow is an aggregate traffic-share encoding, not a traffic forecast.
 
 ## Useful closing line
 
