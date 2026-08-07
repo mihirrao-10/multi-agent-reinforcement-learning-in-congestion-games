@@ -85,8 +85,8 @@ All Q agents choose before rewards are computed and update selected entries only
 - A real waiting state with no fabricated episode or route metrics.
 - A shared Three.js network with top camera controls and bottom population controls.
 - Continuous translucent directional tubes with no individual commuter symbols.
-- Traffic share encoded monotonically by nonlinear radius, hue, and opacity from thin green to thick red.
-- Broad moving light used only as a fluid-looking direction cue.
+- Traffic share encoded monotonically by nonlinear radius, hue, and opacity from the unchanged thin green baseline to a thicker, brighter packed red.
+- Layered moving pulses used only as a fluid-looking direction cue.
 - Four enlarged white cores and soft white halos for `S`, `U`, `V`, and `T`.
 - A complete 100-agent potential surface and deterministic fixed-resolution scale samples.
 - Exact markers, a validated strict-best-response path, and Q traces without downhill claims.

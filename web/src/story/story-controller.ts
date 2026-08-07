@@ -555,7 +555,7 @@ export class StoryController {
           ? ` Episode ${presentation.episode.toLocaleString()}.`
           : "";
       this.caption.textContent = `${this.isSampledStudy() ? "Learning path estimated from 10,000 independently simulated commuters" : `Learning uses an exported full-population path for ${this.bundle.population.toLocaleString()} commuters`}.${episode}`;
-      this.description.textContent = `The network represents ${this.bundle.population.toLocaleString()} commuters. Shortcut open. Route counts ${presentation.routeCounts.join(", ")}; average physical latency ${formatNumber(presentation.averagePhysicalLatency)} minutes.${episode} Thin green flow means a smaller traffic share, thick red flow means a larger traffic share, and broad moving light shows direction. The central shortcut has zero direct latency. ${this.studyDisclosure()}`;
+      this.description.textContent = `The network represents ${this.bundle.population.toLocaleString()} commuters. Shortcut open. Route counts ${presentation.routeCounts.join(", ")}; average physical latency ${formatNumber(presentation.averagePhysicalLatency)} minutes.${episode} Thin green flow means a smaller traffic share, thicker bright-red flow means a larger traffic share, and layered moving pulses show direction. The central shortcut has zero direct latency. ${this.studyDisclosure()}`;
     }
     this.canvas.setAttribute("aria-label", this.description.textContent);
   }
