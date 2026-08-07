@@ -793,11 +793,9 @@ export class StoryController {
         button.addEventListener("click", () => {
           const population = Number(button.dataset.population);
           if (
-            population === 100 ||
             population === 1_000 ||
             population === 10_000 ||
-            population === 100_000 ||
-            population === 1_000_000
+            population === 100_000
           ) {
             void this.selectPopulation(population);
           }

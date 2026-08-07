@@ -2,7 +2,7 @@
 
 ## Thirty-second explanation
 
-The project studies a finite Braess congestion game as a repeated daily commute with independent tabular learners. Every commuter can learn the privately attractive Shortcut correctly, yet the resulting all-Shortcut equilibrium has average latency 120 minutes instead of the optimum 90. Removing the Shortcut restores the 90-minute outcome, while a discrete marginal-cost toll aligns private incentives with physical social cost. The public experience supports 100, 1,000, 10,000, 100,000, and 1,000,000 commuters with exact full-population analysis and honestly labeled full or sampled learning studies.
+The project studies a finite Braess congestion game as a repeated daily commute with independent tabular learners. Every commuter can learn the privately attractive Shortcut correctly, yet the resulting all-Shortcut equilibrium has average latency 120 minutes instead of the optimum 90. Removing the Shortcut restores the 90-minute outcome, while a discrete marginal-cost toll aligns private incentives with physical social cost. The public selector supports 1,000, 10,000, and 100,000 commuters with exact full-population analysis and honestly labeled full or sampled learning studies. A hidden 100-commuter bundle supports the fully replicated comparison chapter.
 
 The main lesson is that better learning does not repair a badly designed objective.
 
@@ -67,7 +67,7 @@ Q_i(a_i) <- Q_i(a_i) + 0.15 [r_i - Q_i(a_i)].
 
 The other learners make each learner's environment nonstationary. The project therefore does not transfer the standard single-agent Q-learning convergence theorem. It reports observed training paths and a separate epsilon-zero final evaluation. The learners do not meet, communicate, exchange Q-values, or see one another's private route estimates. They affect one another only because their independently chosen routes create shared congestion.
 
-The canonical 100-commuter study uses 64 Q seeds per scenario and 5,000 episodes. The 1,000- and 10,000-commuter presets use one declared audited full-population vectorized run per scenario, with 3,200 and 2,400 episodes. The 100,000 and 1,000,000 presets use one shared, declared 10,000-learner sampled route-share study. Their uncertainty is not compared with the replicated study.
+The canonical 100-commuter study uses 64 Q seeds per scenario and 5,000 episodes. The 1,000- and 10,000-commuter presets use one declared audited full-population vectorized run per scenario, with 3,200 and 2,400 episodes. The 100,000 preset uses one declared 10,000-learner sampled route-share study. Its uncertainty is not compared with the replicated study.
 
 ## Why include best response and Hedge?
 
@@ -101,13 +101,13 @@ NumPy `SeedSequence` derives run seeds from base seed `20260804`. Every run then
 
 ## How is the public data honest at scale?
 
-The page initially loads a manifest and the default 100,000-commuter bundle. Other population bundles are fetched only when selected and then cached; the replicated 100-commuter comparison loads only when its chapter is reached. The first three presets contain full-population Q-learning snapshots. The two largest contain sampled-study snapshots scaled by deterministic largest remainder to integer represented-population counts. Costs and loads are recomputed from those scaled counts. Every bundle still contains exact full-population equilibrium, optimum, potential, and welfare analysis.
+The page initially loads a manifest and the default 100,000-commuter bundle. The 1,000 and 10,000 bundles are fetched only when selected and then cached; the replicated 100-commuter comparison loads only when its chapter is reached. The 1,000 and 10,000 presets contain full-population Q-learning snapshots. The 100,000 preset contains sampled-study snapshots scaled by deterministic largest remainder to integer represented-population counts. Costs and loads are recomputed from those scaled counts. Every bundle still contains exact full-population equilibrium, optimum, potential, and welfare analysis.
 
-The renderer draws continuous translucent directional flow. Nonlinear thickness, hue, and opacity all increase monotonically with traffic share from thin green to thick red. Broad moving light supplies a fluid-looking direction cue. Enlarged white-glowing nodes preserve the four junction identities. No individual commuter symbol is used, so rendering complexity does not imply a simulated population size.
+The renderer draws continuous translucent directional flow. Nonlinear thickness, hue, and opacity all increase monotonically with traffic share from the unchanged thin green baseline to a thicker, brighter packed red. Layered moving pulses supply a fluid-looking direction cue. Enlarged white-glowing nodes preserve the four junction identities. No individual commuter symbol is used, so rendering complexity does not imply a simulated population size.
 
 ## Why the guided Start and Proceed flow?
 
-The initial waiting state prevents an unexplained episode counter and arbitrary profile from appearing as fact. Start opens only the question. Proceed introduces a route as an action, then congestion and reward, then the independent Q update. Learning requires a separate `Run learning with N commuters` action. The two sampled presets say `Run sampled learning path` and disclose 10,000 simulated learners beside the full represented population. Metrics appear only after they have meaning, and exploitability waits until the equilibrium chapter.
+The initial waiting state prevents an unexplained episode counter and arbitrary profile from appearing as fact. Start opens only the question. Proceed introduces a route as an action, then congestion and reward, then the independent Q update. Learning requires a separate `Run learning with N commuters` action. The sampled 100,000-commuter preset says `Run sampled learning path` and discloses 10,000 simulated learners beside the full represented population. Metrics appear only after they have meaning, and exploitability waits until the equilibrium chapter.
 
 Locked chapters are truly hidden and absent from accessibility navigation. Population changes reset only playback, retain already unlocked explanations, and never mix metrics across bundles. Full replay returns to the title, the default 100,000 commuters, waiting state, first chapter, and authored camera.
 

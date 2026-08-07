@@ -14,9 +14,9 @@
   --line: #292929;
   --line-strong: #505050;
   --green: #2cd67b;
-  --amber: #f4b942;
-  --orange: #ff7a3d;
-  --red: #ff3030;
+  --amber: #ffc247;
+  --orange: #ff8648;
+  --red: #ff4747;
   --cream: #fff1d0;
   --serif: "STIX Two Text", "Iowan Old Style", Georgia, serif;
   --sans:
@@ -848,7 +848,8 @@ th {
 }
 
 .fallback-flow-bodies path,
-.fallback-flow-glows path {
+.fallback-flow-glows path,
+.fallback-flow-highlights path {
   transition:
     stroke 320ms ease,
     stroke-width 320ms ease,
@@ -857,6 +858,19 @@ th {
 
 .fallback-flow-glows {
   filter: blur(2px);
+}
+
+.fallback-flow-highlights path {
+  stroke: #fff;
+  stroke-dasharray: 10 30;
+  filter: drop-shadow(0 0 2px rgb(255 255 255 / 55%));
+  animation: fallback-flow 1.35s linear infinite;
+}
+
+@keyframes fallback-flow {
+  to {
+    stroke-dashoffset: -40;
+  }
 }
 
 @media (max-width: 1120px) {
@@ -1061,5 +1075,9 @@ th {
 
   .legend-direction {
     background-position: 45% 0;
+  }
+
+  .fallback-flow-highlights path {
+    stroke-dashoffset: -12;
   }
 }

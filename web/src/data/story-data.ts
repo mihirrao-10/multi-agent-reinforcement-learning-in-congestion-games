@@ -49,9 +49,13 @@ export async function loadPopulationBundle(
   const descriptor = manifest.populations.find(
     (entry) => entry.agents === population,
   );
-  if (!descriptor)
+  const bundlePath =
+    population === manifest.comparisonPopulation
+      ? manifest.comparisonBundle
+      : descriptor?.bundle;
+  if (!bundlePath)
     throw new Error(`population ${population} is not in the manifest`);
-  const bundle = await fetchValidated(descriptor.bundle, (payload) => {
+  const bundle = await fetchValidated(bundlePath, (payload) => {
     const result = populationBundleSchema.safeParse(payload);
     if (!result.success) {
       throw new Error(

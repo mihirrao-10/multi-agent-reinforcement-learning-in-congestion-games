@@ -117,10 +117,13 @@ export function validatePresentation(
 
 export function validateManifestConsistency(manifest: StoryManifest): void {
   const populations = manifest.populations.map((entry) => entry.agents);
-  if (populations.join(",") !== "100,1000,10000,100000,1000000") {
+  if (populations.join(",") !== "1000,10000,100000") {
     throw new StoryConsistencyError("manifest population options disagree");
   }
-  if (new Set(manifest.populations.map((entry) => entry.bundle)).size !== 5) {
+  if (
+    manifest.comparisonBundle !== "population-100-v3.json" ||
+    new Set(manifest.populations.map((entry) => entry.bundle)).size !== 3
+  ) {
     throw new StoryConsistencyError("population bundle paths must be distinct");
   }
   for (const entry of manifest.populations) {

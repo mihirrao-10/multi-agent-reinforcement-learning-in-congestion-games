@@ -152,8 +152,7 @@ try {
       (name) =>
         name.includes("population-100-v3") ||
         name.includes("population-1000-v3") ||
-        name.includes("population-10000-v3") ||
-        name.includes("population-1000000-v3"),
+        name.includes("population-10000-v3"),
     )
   ) {
     throw new Error("scale bundles were fetched before selection");
@@ -198,8 +197,6 @@ try {
   await proceed(page, 2);
   await runLearning(page, "2580,2570,94850");
 
-  await selectPopulation(page, 100);
-  await runLearning(page, "23,20,57");
   await selectPopulation(page, 1000);
   await runLearning(page, "61,68,871");
   await selectPopulation(page, 10000);
@@ -216,21 +213,6 @@ try {
   await page.screenshot({
     path: resolve(outputDirectory, "desktop-population-100000.png"),
   });
-  await selectPopulation(page, 1000000);
-  if (
-    (await stage.getAttribute("data-learning-study-kind")) !==
-      "sampled-population-proxy" ||
-    (await stage.getAttribute("data-represented-population")) !== "1000000"
-  ) {
-    throw new Error("1,000,000-commuter sampled-study disclosure is missing");
-  }
-  await runLearning(page, "25800,25700,948500");
-  await page.screenshot({
-    path: resolve(outputDirectory, "desktop-population-1000000.png"),
-  });
-  await selectPopulation(page, 100);
-  await runLearning(page, "23,20,57");
-
   await proceed(page, 3);
   if (
     (await stage.getAttribute("data-scene-mode")) !== "landscape" ||
@@ -241,7 +223,7 @@ try {
   }
   await proceed(page, 4);
   if (
-    (await stage.getAttribute("data-route-counts")) !== "0,0,100" ||
+    (await stage.getAttribute("data-route-counts")) !== "0,0,100000" ||
     (await page.locator("#metric-exploitability").textContent())?.trim() !==
       "0 minutes"
   ) {
@@ -250,14 +232,14 @@ try {
   await proceed(page, 5);
   if (
     (await stage.getAttribute("data-scenario")) !== "braess-closed" ||
-    (await stage.getAttribute("data-route-counts")) !== "50,50"
+    (await stage.getAttribute("data-route-counts")) !== "50000,50000"
   ) {
     throw new Error("deployed closed-shortcut state is incorrect");
   }
   await proceed(page, 6);
   if (
     (await stage.getAttribute("data-scenario")) !== "braess-tolled" ||
-    (await stage.getAttribute("data-route-counts")) !== "50,50,0" ||
+    (await stage.getAttribute("data-route-counts")) !== "50000,50000,0" ||
     (await stage.getAttribute("data-surface")) !== "physical-social-cost"
   ) {
     throw new Error("deployed tolled state is incorrect");

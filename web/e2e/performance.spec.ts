@@ -43,7 +43,7 @@ test("population bundles lazy-load and continuous WebGL flow renders at a stable
   ).toBe(true);
 
   const timings: PopulationTiming[] = [];
-  for (const population of [100, 1_000, 10_000, 100_000, 1_000_000] as const) {
+  for (const population of [1_000, 10_000, 100_000] as const) {
     const loadStart = performance.now();
     await selectPopulation(page, population);
     const loadMilliseconds = performance.now() - loadStart;

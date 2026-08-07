@@ -32,6 +32,7 @@ export class NetworkFallback {
   private readonly container: HTMLElement;
   private readonly paths = new Map<EdgeId, SVGPathElement>();
   private readonly glows = new Map<EdgeId, SVGPathElement>();
+  private readonly highlights = new Map<EdgeId, SVGPathElement>();
   private activeRoute: keyof typeof ROUTE_EDGES | null = null;
 
   constructor(container: HTMLElement) {
@@ -56,6 +57,13 @@ export class NetworkFallback {
             .map(([edge, path]) => `<path data-edge="${edge}" d="${path}" />`)
             .join("")}
         </g>
+        <g class="fallback-flow-highlights" fill="none" stroke-linecap="round">
+          ${Object.entries(PATHS)
+            .map(
+              ([edge, path]) => `<path data-flow-edge="${edge}" d="${path}" />`,
+            )
+            .join("")}
+        </g>
         <g class="fallback-node-halos" fill="#ffffff" opacity="0.13">
           <circle cx="58" cy="150" r="23"/><circle cx="250" cy="78" r="20"/>
           <circle cx="250" cy="222" r="20"/><circle cx="502" cy="150" r="23"/>
@@ -78,6 +86,11 @@ export class NetworkFallback {
       .querySelectorAll<SVGPathElement>("[data-glow-edge]")
       .forEach((path) => {
         this.glows.set(path.dataset.glowEdge as EdgeId, path);
+      });
+    wrapper
+      .querySelectorAll<SVGPathElement>("[data-flow-edge]")
+      .forEach((path) => {
+        this.highlights.set(path.dataset.flowEdge as EdgeId, path);
       });
   }
 
@@ -104,6 +117,11 @@ export class NetworkFallback {
         glow.style.stroke = color;
         glow.dataset.baseOpacity = String(opacity * 0.2);
       }
+      const highlight = this.highlights.get(edge);
+      if (highlight) {
+        highlight.style.strokeWidth = `${Math.max(1.2, radius * 46)}`;
+        highlight.dataset.baseOpacity = String(visible ? opacity * 0.52 : 0);
+      }
     }
     this.applyHighlight();
   }
@@ -124,7 +142,11 @@ export class NetworkFallback {
     for (const [edge, path] of this.paths) {
       const highlighted =
         this.activeRoute === null || ROUTE_EDGES[this.activeRoute].has(edge);
-      for (const element of [path, this.glows.get(edge)]) {
+      for (const element of [
+        path,
+        this.glows.get(edge),
+        this.highlights.get(edge),
+      ]) {
         if (!element) continue;
         element.style.filter = highlighted
           ? "brightness(1.14)"

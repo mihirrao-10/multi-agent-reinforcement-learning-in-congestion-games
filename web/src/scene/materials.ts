@@ -3,14 +3,18 @@ import * as THREE from "three";
 export type EdgeRole = "variable" | "constant" | "shortcut";
 
 const GREEN = new THREE.Color("#2cd67b");
-const AMBER = new THREE.Color("#f4b942");
-const ORANGE = new THREE.Color("#ff7a3d");
-const RED = new THREE.Color("#ff3030");
+const AMBER = new THREE.Color("#ffc247");
+const ORANGE = new THREE.Color("#ff8648");
+const RED = new THREE.Color("#ff4747");
 export const EDGE_RADIUS_MIN = 0.007;
 export const EDGE_RADIUS_SQRT_WEIGHT = 0.021;
 export const EDGE_RADIUS_QUADRATIC_WEIGHT = 0.011;
+export const EDGE_RADIUS_PACKED_WEIGHT = 0.006;
 export const EDGE_RADIUS_MAX =
-  EDGE_RADIUS_MIN + EDGE_RADIUS_SQRT_WEIGHT + EDGE_RADIUS_QUADRATIC_WEIGHT;
+  EDGE_RADIUS_MIN +
+  EDGE_RADIUS_SQRT_WEIGHT +
+  EDGE_RADIUS_QUADRATIC_WEIGHT +
+  EDGE_RADIUS_PACKED_WEIGHT;
 export const REDUCED_MOTION_FLOW_TIME = 1.75;
 
 export const NODE_VISUALS = {
@@ -39,7 +43,8 @@ export function edgeRadius(load: number, population = 100): number {
   return (
     EDGE_RADIUS_MIN +
     EDGE_RADIUS_SQRT_WEIGHT * Math.sqrt(share) +
-    EDGE_RADIUS_QUADRATIC_WEIGHT * share ** 2
+    EDGE_RADIUS_QUADRATIC_WEIGHT * share ** 2 +
+    EDGE_RADIUS_PACKED_WEIGHT * share ** 4
   );
 }
 
@@ -72,7 +77,7 @@ export function edgeFlowSpeed(
   void role;
   void load;
   void population;
-  return 0.48;
+  return 0.58;
 }
 
 export function edgeColorHex(

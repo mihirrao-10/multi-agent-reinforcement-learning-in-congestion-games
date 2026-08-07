@@ -47,7 +47,6 @@ def test_benchmark_suite_reports_present_and_missing_bundle_sets(
         "population-1000-v3.json",
         "population-10000-v3.json",
         "population-100000-v3.json",
-        "population-1000000-v3.json",
     )
     for index, name in enumerate(names, start=1):
         (tmp_path / name).write_text(f'{{"index":{index}}}\n', encoding="utf-8")

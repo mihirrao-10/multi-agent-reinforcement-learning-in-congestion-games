@@ -16,6 +16,7 @@ from congestion_marl.analysis.enumeration import analyze_scenario, weak_composit
 from congestion_marl.config import (
     DEFAULT_STORY_POPULATION,
     POPULATION,
+    SELECTABLE_POPULATIONS,
     SUPPORTED_POPULATIONS,
     ExperimentConfig,
     experiment_config_for_population,
@@ -45,7 +46,6 @@ LANDSCAPE_RESOLUTION = {
     1_000: 64,
     10_000: 64,
     100_000: 64,
-    1_000_000: 64,
 }
 MAX_DISPLAY_PATH_POINTS = 144
 
@@ -627,6 +627,7 @@ def build_manifest() -> dict[str, object]:
         "model": _shared_model_payload(),
         "defaultPopulation": DEFAULT_STORY_POPULATION,
         "comparisonPopulation": POPULATION,
+        "comparisonBundle": f"population-{POPULATION}-v3.json",
         "populations": [
             {
                 "agents": population,
@@ -637,19 +638,15 @@ def build_manifest() -> dict[str, object]:
                 "simulatedLearners": simulated_learner_count(population),
                 "samplingDescription": _learning_study_payload(population)["samplingDescription"],
                 "study": (
-                    "64-seed canonical study"
-                    if population == 100
+                    "one deterministic audited full-population run per scenario"
+                    if learning_study_kind(population) == "full-population"
                     else (
-                        "one deterministic audited full-population run per scenario"
-                        if learning_study_kind(population) == "full-population"
-                        else (
-                            "one deterministic audited 10,000-learner sampled proxy per "
-                            "scenario with exact full-population analysis"
-                        )
+                        "one deterministic audited 10,000-learner sampled proxy per "
+                        "scenario with exact full-population analysis"
                     )
                 ),
             }
-            for population in SUPPORTED_POPULATIONS
+            for population in SELECTABLE_POPULATIONS
         ],
         "seedPolicy": seed_policy(),
     }

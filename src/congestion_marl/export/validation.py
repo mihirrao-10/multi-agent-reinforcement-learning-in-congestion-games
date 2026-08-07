@@ -14,6 +14,7 @@ from congestion_marl.config import (
     DEFAULT_STORY_POPULATION,
     POPULATION,
     SAMPLED_STUDY_POPULATIONS,
+    SELECTABLE_POPULATIONS,
     SUPPORTED_POPULATIONS,
     learning_study_kind,
     simulated_learner_count,
@@ -412,10 +413,14 @@ def validate_manifest(payload: Mapping[str, object]) -> None:
         "default population disagrees",
     )
     _require(payload.get("comparisonPopulation") == POPULATION, "comparison population disagrees")
+    _require(
+        payload.get("comparisonBundle") == f"population-{POPULATION}-v3.json",
+        "comparison bundle disagrees",
+    )
     populations = cast(list[Mapping[str, object]], payload["populations"])
     exported = tuple(_integer(item["agents"], "population") for item in populations)
-    _require(exported == SUPPORTED_POPULATIONS, "public population options disagree")
-    for item, population in zip(populations, SUPPORTED_POPULATIONS, strict=True):
+    _require(exported == SELECTABLE_POPULATIONS, "public population options disagree")
+    for item, population in zip(populations, SELECTABLE_POPULATIONS, strict=True):
         _require(
             item.get("bundle") == f"population-{population}-v3.json",
             "manifest bundle filename disagrees",

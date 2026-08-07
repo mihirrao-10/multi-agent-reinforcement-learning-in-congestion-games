@@ -10,15 +10,15 @@ describe("story schema", () => {
     expect(story.schemaVersion).toBe("3.0.0");
     expect(story.population).toBe(100);
     expect(manifest.populations.map((entry) => entry.agents)).toEqual([
-      100, 1_000, 10_000, 100_000, 1_000_000,
+      1_000, 10_000, 100_000,
     ]);
+    expect(manifest.comparisonPopulation).toBe(100);
+    expect(manifest.comparisonBundle).toBe("population-100-v3.json");
     expect(
       manifest.populations.map((entry) => entry.learningStudyKind),
     ).toEqual([
       "full-population",
       "full-population",
-      "full-population",
-      "sampled-population-proxy",
       "sampled-population-proxy",
     ]);
   });

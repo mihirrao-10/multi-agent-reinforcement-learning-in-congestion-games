@@ -36,21 +36,29 @@ const FLOW_FRAGMENT_SHADER = `
   uniform float uLayer;
   uniform float uSceneOpacity;
 
+  float circularDistance(float value) {
+    return min(value, 1.0 - value);
+  }
+
   void main() {
     const float TAU = 6.28318530718;
-    float phaseA = TAU * (vFlowUv.x * 1.18 - uFlowOffset + uPhase);
-    float phaseB = TAU * (vFlowUv.x * 0.57 - uFlowOffset * 0.48 + uPhase * 1.73);
-    float phaseC = TAU * (vFlowUv.x * 0.31 - uFlowOffset * 0.24 + uPhase * 0.63);
-    float broadA = 0.5 + 0.5 * sin(phaseA);
-    float broadB = 0.5 + 0.5 * sin(phaseB);
-    float broadC = 0.5 + 0.5 * sin(phaseC);
-    float flowingLight = 0.72 + broadA * 0.13 + broadB * 0.09 + broadC * 0.06;
+    float trainA = fract(vFlowUv.x * 2.65 - uFlowOffset * 1.10 + uPhase);
+    float trainB = fract(vFlowUv.x * 4.40 - uFlowOffset * 1.65 + uPhase * 1.73);
+    float pulseA = exp(-42.0 * pow(circularDistance(trainA), 2.0));
+    float pulseB = exp(-72.0 * pow(circularDistance(trainB), 2.0));
+    float directionalPulse = min(1.0, pulseA * 0.72 + pulseB * 0.50);
+    float ribbon = 0.5 + 0.5 * sin(
+      TAU * (vFlowUv.y + vFlowUv.x * 1.35 - uFlowOffset * 0.52 + uPhase)
+    );
+    float flowingLight = 0.70 + directionalPulse * 0.30 + ribbon * 0.06;
     float focusLift = 1.0 + uFocus * 0.24;
-    vec3 bodyColor = uColor * flowingLight * focusLift + vec3(vRim * 0.08);
-    vec3 glowColor = uColor * (0.68 + broadB * 0.18 + vRim * 0.35) * focusLift;
+    vec3 bodyColor = uColor * flowingLight * focusLift + vec3(vRim * 0.10);
+    vec3 glowColor = uColor *
+      (0.68 + directionalPulse * 0.42 + ribbon * 0.08 + vRim * 0.36) *
+      focusLift;
     vec3 color = mix(bodyColor, glowColor, uLayer);
-    float bodyAlpha = uOpacity * (0.86 + broadA * 0.09 + broadB * 0.05);
-    float glowAlpha = uOpacity * (0.11 + broadA * 0.035 + vRim * 0.055);
+    float bodyAlpha = uOpacity * (0.84 + directionalPulse * 0.14 + ribbon * 0.02);
+    float glowAlpha = uOpacity * (0.10 + directionalPulse * 0.075 + vRim * 0.055);
     float alpha = mix(bodyAlpha, glowAlpha, uLayer) * uSceneOpacity;
     gl_FragColor = vec4(color, alpha);
   }

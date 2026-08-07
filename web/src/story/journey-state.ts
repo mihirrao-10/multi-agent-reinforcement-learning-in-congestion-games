@@ -35,7 +35,7 @@ export interface ConceptVisibility {
 }
 
 export function initialJourneyState(
-  selectedPopulation: Population = 100,
+  selectedPopulation: Population = 100_000,
 ): JourneyState {
   return {
     started: false,

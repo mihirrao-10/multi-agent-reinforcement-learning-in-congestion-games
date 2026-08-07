@@ -185,7 +185,8 @@ test("Start reveals a waiting network and concepts unlock one act at a time", as
     lightColor: element.dataset.edgeColorUt,
   }));
   expect(flowEncoding.heavyRadius).toBeGreaterThan(flowEncoding.lightRadius);
-  expect(flowEncoding.heavyRadius).toBeLessThanOrEqual(0.039);
+  expect(flowEncoding.heavyRadius).toBeGreaterThan(0.039);
+  expect(flowEncoding.heavyRadius).toBeLessThanOrEqual(0.045);
   expect(flowEncoding.lightRadius).toBeGreaterThanOrEqual(0.007);
   expect(flowEncoding.heavyColor).not.toBe(flowEncoding.lightColor);
   await expect(page.locator('[data-proceed-act="3"]')).toBeVisible();
@@ -359,6 +360,7 @@ test("all population choices load distinct computed trajectories without stale v
   await page.emulateMedia({ reducedMotion: "reduce" });
   const errors = watchRuntimeErrors(page);
   await startStory(page);
+  await expect(page.locator("button[data-population]")).toHaveCount(3);
   await unlockThrough(page, 3);
   const initialResources = await page.evaluate(() =>
     performance.getEntriesByType("resource").map((entry) => entry.name),
@@ -375,27 +377,10 @@ test("all population choices load distinct computed trajectories without stale v
   expect(
     initialResources.some((name) => name.includes("population-100000-v3.json")),
   ).toBe(true);
-  expect(
-    initialResources.some((name) =>
-      name.includes("population-1000000-v3.json"),
-    ),
-  ).toBe(false);
-
   await runLearningToCompletion(page);
   await expect(page.locator("#stage")).toHaveAttribute(
     "data-route-counts",
     "2580,2570,94850",
-  );
-
-  await selectPopulation(page, 100);
-  await expect(page.locator("#stage")).toHaveAttribute(
-    "data-learning-study-kind",
-    "full-population",
-  );
-  await runLearningToCompletion(page);
-  await expect(page.locator("#stage")).toHaveAttribute(
-    "data-route-counts",
-    "23,20,57",
   );
 
   await selectPopulation(page, 1_000);
@@ -442,7 +427,7 @@ test("all population choices load distinct computed trajectories without stale v
     path: "e2e/screenshots/population-10000-flow.png",
   });
 
-  for (const population of [100_000, 1_000_000] as const) {
+  for (const population of [100_000] as const) {
     await selectPopulation(page, population);
     await expect(page.locator("#stage")).toHaveAttribute(
       "data-learning-study-kind",
@@ -465,7 +450,7 @@ test("all population choices load distinct computed trajectories without stale v
     await runLearningToCompletion(page);
     await expect(page.locator("#stage")).toHaveAttribute(
       "data-route-counts",
-      population === 100_000 ? "2580,2570,94850" : "25800,25700,948500",
+      "2580,2570,94850",
     );
     await page.screenshot({
       path: `e2e/screenshots/population-${population}-sampled-flow.png`,
@@ -473,7 +458,7 @@ test("all population choices load distinct computed trajectories without stale v
   }
   await expect(
     page.locator("#stable-inefficient [data-exact='open-equilibrium-counts']"),
-  ).toHaveText(["(0, 0, 1000000)", "(0, 0, 1000000)"]);
+  ).toHaveText(["(0, 0, 100000)", "(0, 0, 100000)"]);
 
   const resources = await page.evaluate(() =>
     performance.getEntriesByType("resource").map((entry) => entry.name),
@@ -486,9 +471,6 @@ test("all population choices load distinct computed trajectories without stale v
   ).toBe(true);
   expect(
     resources.some((name) => name.includes("population-100000-v3.json")),
-  ).toBe(true);
-  expect(
-    resources.some((name) => name.includes("population-1000000-v3.json")),
   ).toBe(true);
   expect(errors).toEqual([]);
 });

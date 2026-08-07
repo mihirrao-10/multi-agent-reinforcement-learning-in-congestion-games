@@ -49,7 +49,7 @@ Hedge is a full-information online-learning method. External regret compares rea
 
 ## Project-specific model choices
 
-- Supported represented populations `100`, `1,000`, `10,000`, `100,000`, and `1,000,000`.
+- Selectable represented populations `1,000`, `10,000`, and `100,000`, plus a hidden `100`-commuter comparison bundle.
 - Labeled, atomic, unsplittable agents with complete-route actions.
 - Variable costs `60x/N` minutes, constant costs 60 minutes, and a zero-cost central edge.
 - Route codes `U`, `L`, and `Z`.
@@ -73,7 +73,6 @@ These choices preserve the intended Braess structure as population changes. They
 | 1,000-agent Q scale study | 3,200 episodes, one seed per scenario |
 | 10,000-agent Q scale study | 2,400 episodes, one seed per scenario |
 | 100,000-agent sampled study | 10,000 learners, 2,400 episodes, one seed per scenario |
-| 1,000,000-agent sampled study | 10,000 learners, 2,400 episodes, one seed per scenario |
 | Hedge rate | `eta = 0.18` |
 | Base seed | `20260804` |
 | Representative | final-count medoid, exploitability, then seed |
@@ -100,8 +99,8 @@ Visual interpolation never creates a numerical claim. Textual values come from e
 
 - The finite-episode canonical 100-commuter representative remains mixed, while the exact all-Shortcut profile is separately identified as an equilibrium.
 - The committed 1,000- and 10,000-commuter full studies have distinct training endpoints.
-- The two largest displayed training paths are disclosed scaled summaries of one 10,000-learner proxy.
-- Epsilon-zero greedy evaluations reach all Shortcut for the 10,000-commuter study and the two sampled scale views; the 100 and 1,000 studies remain mixed at their declared episode budgets.
+- The 100,000-commuter displayed training path is disclosed as a scaled summary of one 10,000-learner proxy.
+- Epsilon-zero greedy evaluations reach all Shortcut for the 10,000- and 100,000-commuter studies; the hidden 100-commuter comparison and the 1,000-commuter study remain mixed at their declared episode budgets.
 - The canonical tolled representative is near an exact optimum but need not equal it in every run.
 - Low Hedge regret does not force every final profile to be a pure equilibrium.
 

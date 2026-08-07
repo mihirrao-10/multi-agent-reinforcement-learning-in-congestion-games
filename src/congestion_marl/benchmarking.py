@@ -67,7 +67,7 @@ def benchmark_suite(bundle_directory: Path | None = None) -> dict[str, object]:
         data_directory / "manifest-v3.json",
         *(
             data_directory / f"population-{population}-v3.json"
-            for population in (100, 1_000, 10_000, 100_000, 1_000_000)
+            for population in (100, 1_000, 10_000, 100_000)
         ),
     )
 

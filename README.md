@@ -6,7 +6,7 @@
 
 Each episode represents a new morning commute. Independent tabular learners separately choose complete routes from source `S` to destination `T`, experience only their own trip, and update only their own selected action. They do not meet, message, or exchange Q-values. Their shared congestion couples their rewards without creating communication between learners. With the central link closed, an even split gives every commuter a 90-minute trip. The zero-cost link is privately attractive, and the untolled game has an all-Shortcut equilibrium with a 120-minute trip. Removing the link restores the 90-minute outcome. Discrete marginal-cost tolls instead align equilibrium with the same physical optimum.
 
-The five audited population options are 100, 1,000, 10,000, 100,000, and 1,000,000. Exact equilibrium, welfare, toll, and potential claims always use the full selected population. Independent Q-learning simulates every commuter through 10,000. The 100,000 and 1,000,000 views are explicitly labeled 10,000-learner sampled studies: deterministic largest-remainder scaling converts estimated route shares into represented-population integer counts, then every displayed load and cost is recomputed for the full represented population.
+The three selectable population options are 1,000, 10,000, and 100,000. Exact equilibrium, welfare, toll, and potential claims always use the full selected population. Independent Q-learning simulates every commuter through 10,000. The 100,000 view is explicitly labeled a 10,000-learner sampled study: deterministic largest-remainder scaling converts estimated route shares into represented-population integer counts, then every displayed load and cost is recomputed for the full represented population. A separate 100-commuter bundle remains reserved for the fully replicated comparison chapter and is not a selector option.
 
 The thesis is narrow: capable individual learning can faithfully discover inefficient incentives. Learning quality and incentive quality are different questions.
 
@@ -80,7 +80,6 @@ This is exact constant-size candidate analysis. It reports the correct count-sta
 | 1,000 | 501,501 | 2,145 deterministic samples |
 | 10,000 | 50,015,001 | 2,145 deterministic samples |
 | 100,000 | 5,000,150,001 | 2,145 deterministic samples |
-| 1,000,000 | 500,001,500,001 | 2,145 deterministic samples |
 
 Small populations are exhaustively cross-checked against the reduced algorithm for all scenarios, all equilibria, all optima, efficiency ratios, exploitability, potential changes, and toll identities.
 
@@ -126,7 +125,6 @@ The 100-agent comparison retains 64 independent-Q seeds and 64 Hedge seeds per s
 | 1,000 | 3,200 | one audited scale run | `(61, 68, 871)` | `(55, 59, 886)` |
 | 10,000 | 2,400 | one audited scale run | `(258, 257, 9485)` | `(0, 0, 10000)` |
 | 100,000 | 2,400 | sampled 10,000-learner proxy | `(2580, 2570, 94850)` | `(0, 0, 100000)` |
-| 1,000,000 | 2,400 | sampled 10,000-learner proxy | `(25800, 25700, 948500)` | `(0, 0, 1000000)` |
 
 The training endpoint and epsilon-zero evaluation answer different empirical questions and remain separate in the export. Uncertainty from the one-run scale studies is never compared as if it had 64 replications.
 
@@ -142,12 +140,11 @@ web/public/data/population-100-v3.json
 web/public/data/population-1000-v3.json
 web/public/data/population-10000-v3.json
 web/public/data/population-100000-v3.json
-web/public/data/population-1000000-v3.json
 ```
 
-The initial page fetches only the manifest and default 100,000-commuter bundle. Other population bundles load on selection and are cached. The fully replicated 100-commuter comparison loads only when its chapter is reached. A failed population selection leaves the previous validated bundle active and exposes a retry. Snapshots store aggregate route counts, derived edge loads, route costs, objectives, and diagnostics, not population-sized assignment arrays. Large surfaces are fixed-resolution samples of the exact formula, while equilibrium, optimum, active-profile, and path markers remain exact integer states.
+The initial page fetches only the manifest and default 100,000-commuter bundle. The 1,000 and 10,000 bundles load on selection and are cached. The fully replicated 100-commuter comparison loads only when its chapter is reached. A failed population selection leaves the previous validated bundle active and exposes a retry. Snapshots store aggregate route counts, derived edge loads, route costs, objectives, and diagnostics, not population-sized assignment arrays. Large surfaces are fixed-resolution samples of the exact formula, while equilibrium, optimum, active-profile, and path markers remain exact integer states.
 
-The network uses continuous translucent directional flow on every edge. Nonlinear tube thickness, hue, and opacity all encode traffic share monotonically from thin green to thick red. Broad moving light supplies a fluid-looking direction cue without pretending to show individual commuters. Four enlarged white cores with soft white halos identify `S`, `U`, `V`, and `T`. The native SVG fallback preserves the same encodings. Reduced motion freezes every directional phase at a deterministic value.
+The network uses continuous translucent directional flow on every edge. Nonlinear tube thickness, hue, and opacity all encode traffic share monotonically from the unchanged thin green baseline to a thicker, brighter packed-red endpoint. Layered moving pulses supply a legible fluid direction cue without pretending to show individual commuters. Four enlarged white cores with soft white halos identify `S`, `U`, `V`, and `T`. The native SVG fallback preserves the same encodings. Reduced motion freezes every directional phase at a deterministic value.
 
 ## Architecture
 
@@ -173,8 +170,8 @@ make setup
 ```
 
 ```bash
-# Exact analysis at any supported population
-congestion-marl enumerate --scenario braess-open --population 1000000 --json
+# Exact analysis at a represented population
+congestion-marl enumerate --scenario braess-open --agents 100000 --json
 
 # One deterministic learner
 congestion-marl simulate --scenario braess-open --learner q-learning --agents 100

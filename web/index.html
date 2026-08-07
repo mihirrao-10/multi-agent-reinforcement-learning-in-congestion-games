@@ -195,13 +195,6 @@
               <div class="population-options">
                 <button
                   type="button"
-                  data-population="100"
-                  aria-pressed="false"
-                >
-                  100
-                </button>
-                <button
-                  type="button"
                   data-population="1000"
                   aria-pressed="false"
                 >
@@ -220,13 +213,6 @@
                   aria-pressed="true"
                 >
                   100,000
-                </button>
-                <button
-                  type="button"
-                  data-population="1000000"
-                  aria-pressed="false"
-                >
-                  1,000,000
                 </button>
               </div>
               <span
@@ -658,8 +644,8 @@
               <p class="comparison-scope">
                 The comparison below is the fully replicated 100-commuter study.
                 The 1,000 and 10,000 presets use one audited full-population
-                run. The 100,000 and 1,000,000 presets use one audited sampled
-                proxy and are not assigned the same uncertainty.
+                run. The 100,000 preset uses one audited sampled proxy and is
+                not assigned the same uncertainty.
               </p>
               <p
                 id="comparison-loading"
@@ -752,10 +738,11 @@
                 The variable latency is <span data-math="c_N(x)=60x/N"></span>
                 minutes. The two constant outer edges each take 60 minutes and
                 the central edge takes zero. This preserves the same Braess
-                structure at 100, 1,000, 10,000, 100,000, and 1,000,000
-                commuters. The roads encode traffic share, so normalized
-                populations can produce similar shapes even though exact
-                commuter counts differ by orders of magnitude.
+                structure for the hidden 100-commuter comparison and the
+                selectable 1,000, 10,000, and 100,000-commuter views. The roads
+                encode traffic share, so normalized populations can produce
+                similar shapes even though exact commuter counts differ by
+                orders of magnitude.
               </p>
               <h3>Exact analysis without materializing count states</h3>
               <p>
@@ -773,12 +760,12 @@
                 actions are selected before rewards, only selected entries
                 update, and epsilon-zero evaluation uses an isolated random
                 stream. The 100-commuter study uses 64 seeds. The 1,000 and
-                10,000 studies simulate every commuter. For 100,000 and
-                1,000,000, 10,000 independent learners estimate normalized route
-                shares; deterministic largest remainder converts each snapshot
-                to represented-population integer counts, and all displayed
-                costs are recomputed from those counts. Exact equilibrium and
-                optimum markers always use the full represented population.
+                10,000 studies simulate every commuter. For 100,000 commuters,
+                10,000 independent learners estimate normalized route shares;
+                deterministic largest remainder converts each snapshot to
+                represented-population integer counts, and all displayed costs
+                are recomputed from those counts. Exact equilibrium and optimum
+                markers always use the full represented population.
               </p>
               <h3>Deterministic public data</h3>
               <p>
@@ -795,8 +782,8 @@
                 remain exact integer profiles. No individual commuter markers
                 are rendered. Tube thickness, hue, and opacity all increase
                 monotonically with edge traffic share, from thin green to thick
-                red. Broad longitudinal light gives the roads a fluid appearance
-                and shows travel direction.
+                bright red. Layered directional pulses give the roads a fluid
+                appearance and make travel direction easier to read.
               </p>
               <h3>Boundaries and limitations</h3>
               <ul>

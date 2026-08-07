@@ -41,7 +41,7 @@ export type StoryEvent =
 
 export function initialStoryState(
   reducedMotion: boolean,
-  population: Population = 100,
+  population: Population = 100_000,
 ): StoryState {
   return {
     activeChapter: 0,

@@ -19,6 +19,7 @@ test("the continuous SVG fallback follows waiting, learning, population, closed,
   await expect(page.locator("body")).toHaveAttribute("data-webgl", "fallback");
   await expect(fallback).toBeVisible();
   await expect(fallback.locator("[data-edge]")).toHaveCount(5);
+  await expect(fallback.locator("[data-flow-edge]")).toHaveCount(5);
   await expect(fallback.locator(".fallback-node-cores circle")).toHaveCount(4);
   await expect(fallback.locator(".fallback-node-halos circle")).toHaveCount(4);
   await expect(fallback).toHaveAttribute(
@@ -68,7 +69,7 @@ test("the continuous SVG fallback follows waiting, learning, population, closed,
     };
   });
   expect(flowAudit.bottleneckWidth).toBeGreaterThan(flowAudit.lightlyUsedWidth);
-  expect(flowAudit.shortcutColor).toBe("rgb(255, 97, 55)");
+  expect(flowAudit.shortcutColor).toBe("rgb(255, 110, 72)");
   expect(flowAudit.nodeFill).toBe("rgb(255, 255, 255)");
   await proceedFrom(page, 3);
   await proceedFrom(page, 4);

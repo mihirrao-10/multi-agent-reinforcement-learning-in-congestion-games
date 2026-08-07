@@ -31,7 +31,6 @@ for (const path of [
   "public/data/population-1000-v3.json",
   "public/data/population-10000-v3.json",
   "public/data/population-100000-v3.json",
-  "public/data/population-1000000-v3.json",
 ]) {
   if (!existsSync(resolve(root, path))) {
     throw new Error(`Required local publication asset is absent: ${path}`);

@@ -12,6 +12,7 @@ from congestion_marl.analysis.enumeration import (
 )
 from congestion_marl.config import (
     SAMPLED_LEARNERS,
+    SELECTABLE_POPULATIONS,
     SUPPORTED_POPULATIONS,
     ExperimentConfig,
     HedgeConfig,
@@ -149,7 +150,8 @@ def test_convex_candidate_neighborhood_is_constant_size_at_a_million() -> None:
 
 
 def test_population_study_contract_and_largest_remainder_scaling() -> None:
-    assert SUPPORTED_POPULATIONS == (100, 1_000, 10_000, 100_000, 1_000_000)
+    assert SELECTABLE_POPULATIONS == (1_000, 10_000, 100_000)
+    assert SUPPORTED_POPULATIONS == (100, 1_000, 10_000, 100_000)
     assert SAMPLED_LEARNERS == 10_000
     for population in SUPPORTED_POPULATIONS:
         sampled = population >= 100_000
@@ -221,7 +223,7 @@ def test_large_landscapes_do_not_materialize_quadratic_state_spaces() -> None:
     assert landscape["sampling"]["fullCountStateCount"] == 50_015_001  # type: ignore[index]
 
 
-@pytest.mark.parametrize("population", [100_000, 1_000_000])
+@pytest.mark.parametrize("population", [100_000])
 def test_sampled_study_bundles_recompute_full_population_measurements(
     population: int,
 ) -> None:

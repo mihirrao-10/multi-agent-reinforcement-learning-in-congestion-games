@@ -14,7 +14,7 @@ Exact claims come from rational game analysis. Learner outcomes are empirical. N
 
 ### Populations and actions
 
-The public populations are `N = 100`, `N = 1,000`, `N = 10,000`, `N = 100,000`, and `N = 1,000,000`. Commuters are labeled, atomic, and unsplittable. Each episode is one new morning commute, and each learner chooses one complete source-to-destination route.
+The selectable public populations are `N = 1,000`, `N = 10,000`, and `N = 100,000`. A separate `N = 100` bundle supports the fully replicated comparison chapter but is not a selector option. Commuters are labeled, atomic, and unsplittable. Each episode is one new morning commute, and each learner chooses one complete source-to-destination route.
 
 | Index | Code | Name | Directed edges |
 | ---: | --- | --- | --- |
@@ -93,7 +93,6 @@ Materializing every weak composition is practical at 100 commuters but not at th
 | 1,000 | 501,501 | 1,001 |
 | 10,000 | 50,015,001 | 10,001 |
 | 100,000 | 5,000,150,001 | 100,001 |
-| 1,000,000 | 500,001,500,001 | 1,000,001 |
 
 For the open game, both physical social cost and untolled Rosenthal potential can be written as
 
@@ -131,7 +130,7 @@ Every small-instance directed deviation is checked exactly for
 Phi(x') - Phi(x) = J_i(x') - J_i(x).
 ```
 
-The same symbolic edgewise identity applies for every supported population. The export records the number of feasible deviations covered by that identity: 30,300 at 100; 3,003,000 at 1,000; 300,030,000 at 10,000; 30,000,300,000 at 100,000; and 3,000,003,000,000 at 1,000,000.
+The same symbolic edgewise identity applies for every exported population. The export records the number of feasible deviations covered by that identity: 30,300 at 100; 3,003,000 at 1,000; 300,030,000 at 10,000; and 30,000,300,000 at 100,000.
 
 For a variable edge under the discrete toll,
 
@@ -174,15 +173,14 @@ Learners do not meet, exchange messages, share Q-values, or observe one another'
 | 1,000 | 3,200 | 1 | audited vectorized scale trajectory |
 | 10,000 | 2,400 | 1 | audited vectorized scale trajectory |
 | 100,000 | 2,400 | 1 | 10,000-learner sampled route-share study |
-| 1,000,000 | 2,400 | 1 | 10,000-learner sampled route-share study |
 
-The larger episode schedules keep deterministic public regeneration practical while retaining the same update rule and epsilon schedule. The 100, 1,000, and 10,000 studies simulate the full represented population. For 100,000 and 1,000,000, 10,000 separate tabular learners estimate normalized route shares. Deterministic largest remainder produces full-population integer route counts, and all loads, route costs, latency, social cost, exploitability, and exact distances are recomputed for the represented population. The labels and bundle metadata expose both learner count and represented population. Their one-run scope does not support uncertainty comparisons with the canonical 64-seed study.
+The larger episode schedules keep deterministic public regeneration practical while retaining the same update rule and epsilon schedule. The 100, 1,000, and 10,000 studies simulate the full represented population. For 100,000, 10,000 separate tabular learners estimate normalized route shares. Deterministic largest remainder produces full-population integer route counts, and all loads, route costs, latency, social cost, exploitability, and exact distances are recomputed for the represented population. The labels and bundle metadata expose both learner count and represented population. The one-run scale studies do not support uncertainty comparisons with the canonical 64-seed study.
 
-The committed open training endpoints are `(23, 20, 57)`, `(61, 68, 871)`, `(258, 257, 9485)`, `(2580, 2570, 94850)`, and `(25800, 25700, 948500)`. The corresponding epsilon-zero greedy profiles are `(21, 20, 59)`, `(55, 59, 886)`, and then all Shortcut for the three larger represented populations. The first three are empirical results from full-population arrays. The last two are explicitly scaled integer summaries of the shared 10,000-learner proxy, never described as full-population simulation.
+The committed open training endpoints are `(23, 20, 57)`, `(61, 68, 871)`, `(258, 257, 9485)`, and `(2580, 2570, 94850)` for the hidden 100-commuter comparison and the three selectable populations. The corresponding epsilon-zero greedy profiles are `(21, 20, 59)`, `(55, 59, 886)`, and then all Shortcut for the 10,000- and 100,000-commuter studies. The first three training endpoints are empirical results from full-population arrays. The 100,000-commuter endpoint is an explicitly scaled integer summary of the 10,000-learner proxy, never described as full-population simulation.
 
 ### Baselines
 
-- Asynchronous strict best response selects one labeled agent at a time, evaluates exact unilateral costs, and accepts only strict improvements. The 100-agent comparison uses 16 seeded orders per scenario. The exact open-game paths contain 65, 665, 6,665, 66,665, and 666,665 count states across the five populations; paths longer than 144 points retain 144 ordered display checkpoints while every omitted one-agent move is validated by the closed-form construction.
+- Asynchronous strict best response selects one labeled agent at a time, evaluates exact unilateral costs, and accepts only strict improvements. The 100-agent comparison uses 16 seeded orders per scenario. The exact open-game paths contain 65, 665, 6,665, and 66,665 count states across the four exported bundles; paths longer than 144 points retain 144 ordered display checkpoints while every omitted one-agent move is validated by the closed-form construction.
 - Hedge gives every agent the full counterfactual route-cost vector and uses stable log weights with `eta = 0.18`. The canonical comparison uses 64 seeds per scenario.
 
 Information assumptions differ. Q-learning sees only selected-route reward. Best response has exact model access. Hedge has full counterfactual feedback. Low external regret is not presented as last-iterate pure Nash convergence.
@@ -195,7 +193,7 @@ The representative run minimizes total pairwise L1 distance between final route-
 
 ## Snapshot and export protocol
 
-Snapshots begin at measured episode 1 and always include the final training episode. Deterministic adaptive thinning keeps 243 snapshots at 100 commuters, 136 at 1,000, and 102 at 10,000 and both sampled-study presets for the committed open trajectories. Each snapshot contains:
+Snapshots begin at measured episode 1 and always include the final training episode. Deterministic adaptive thinning keeps 243 snapshots at 100 commuters, 136 at 1,000, and 102 at 10,000 and the sampled 100,000-commuter preset for the committed open trajectories. Each snapshot contains:
 
 - route counts and derived edge loads;
 - physical edge latencies;
@@ -206,7 +204,7 @@ Snapshots begin at measured episode 1 and always include the final training epis
 
 Population-sized assignments and Q arrays are intentionally absent from public JSON. The Q shape, simultaneous-choice contract, selected-action-only update contract, and epsilon-zero evaluation remain explicit metadata.
 
-Schema `3.0.0` uses one manifest plus five population-specific bundles. Python validation independently re-derives all public numerical fields from aggregate counts and rejects dishonest learner-count or represented-population metadata. TypeScript uses Zod plus a second numerical re-derivation before presentation. Stable key ordering, finite-number serialization, fixed seeds, and omitted wall-clock fields make regeneration byte-identical.
+Schema `3.0.0` uses one manifest, three selectable population bundles, and one hidden 100-commuter comparison bundle. Python validation independently re-derives all public numerical fields from aggregate counts and rejects dishonest learner-count or represented-population metadata. TypeScript uses Zod plus a second numerical re-derivation before presentation. Stable key ordering, finite-number serialization, fixed seeds, and omitted wall-clock fields make regeneration byte-identical.
 
 ## Potential surface protocol
 

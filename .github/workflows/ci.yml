@@ -42,7 +42,7 @@ jobs:
 
       - name: Run canonical exact enumeration
         run: |
-          for population in 100 1000 10000 100000 1000000; do
+          for population in 100 1000 10000 100000; do
             congestion-marl enumerate --scenario braess-open --agents "${population}" --json
             congestion-marl enumerate --scenario braess-closed --agents "${population}" --json
             congestion-marl enumerate --scenario braess-tolled --agents "${population}" --json
@@ -52,7 +52,7 @@ jobs:
         run: |
           congestion-marl export --output "${RUNNER_TEMP}/population-data"
           congestion-marl validate "${RUNNER_TEMP}/population-data"
-          for file in manifest-v3.json population-100-v3.json population-1000-v3.json population-10000-v3.json population-100000-v3.json population-1000000-v3.json; do
+          for file in manifest-v3.json population-100-v3.json population-1000-v3.json population-10000-v3.json population-100000-v3.json; do
             cmp "${RUNNER_TEMP}/population-data/${file}" "web/public/data/${file}"
           done
 

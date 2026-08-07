@@ -28,9 +28,7 @@ describe("numerical consistency", () => {
   });
 
   it("validates every browser-critical invariant", () => {
-    for (const population of [
-      100, 1_000, 10_000, 100_000, 1_000_000,
-    ] as const) {
+    for (const population of [100, 1_000, 10_000, 100_000] as const) {
       expect(() =>
         validateBundleConsistency(loadFixture(population)),
       ).not.toThrow();
@@ -46,7 +44,7 @@ describe("numerical consistency", () => {
         bundle.learning.scenarios["braess-open"].routeShareScaling,
       ).toBeUndefined();
     }
-    for (const population of [100_000, 1_000_000] as const) {
+    for (const population of [100_000] as const) {
       const bundle = loadFixture(population);
       const learner = bundle.learning.scenarios["braess-open"];
       expect(bundle.learningStudy.learningStudyKind).toBe(

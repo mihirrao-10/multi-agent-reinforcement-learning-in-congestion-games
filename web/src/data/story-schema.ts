@@ -12,7 +12,6 @@ export const populationSchema = z.union([
   z.literal(1_000),
   z.literal(10_000),
   z.literal(100_000),
-  z.literal(1_000_000),
 ]);
 export type Population = z.infer<typeof populationSchema>;
 
@@ -253,6 +252,7 @@ export const manifestSchema = z.object({
   }),
   defaultPopulation: z.literal(100_000),
   comparisonPopulation: z.literal(100),
+  comparisonBundle: z.literal("population-100-v3.json"),
   populations: z
     .array(
       z.object({
@@ -266,7 +266,7 @@ export const manifestSchema = z.object({
         study: z.string(),
       }),
     )
-    .length(5),
+    .length(3),
   seedPolicy: z.record(z.string(), z.unknown()),
 });
 export type StoryManifest = z.infer<typeof manifestSchema>;

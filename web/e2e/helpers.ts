@@ -73,7 +73,7 @@ export async function unlockThrough(
 
 export async function selectPopulation(
   page: Page,
-  population: 100 | 1_000 | 10_000 | 100_000 | 1_000_000,
+  population: 1_000 | 10_000 | 100_000,
 ): Promise<void> {
   await page.locator(`button[data-population="${population}"]`).click();
   await expect(page.locator("body")).toHaveAttribute(

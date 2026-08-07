@@ -25,8 +25,8 @@ describe("story data repository", () => {
               : input.url;
         const payload = path.includes("manifest-v3")
           ? loadManifestFixture()
-          : path.includes("population-1000000")
-            ? loadFixture(1_000_000)
+          : path.includes("population-100-v3")
+            ? loadFixture(100)
             : loadFixture(100_000);
         return Promise.resolve(
           new Response(JSON.stringify(payload), { status: 200 }),
@@ -35,16 +35,16 @@ describe("story data repository", () => {
     const initial = await loadInitialData();
     expect(initial.bundle.population).toBe(100_000);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const large = await loadPopulationBundle(1_000_000);
-    expect(large.population).toBe(1_000_000);
-    expect(large.learning.configuration.simulatedLearners).toBe(10_000);
-    expect(large.learningStudy).toMatchObject({
-      learningStudyKind: "sampled-population-proxy",
-      representedPopulation: 1_000_000,
-      simulatedLearners: 10_000,
+    const comparison = await loadPopulationBundle(100);
+    expect(comparison.population).toBe(100);
+    expect(comparison.learning.configuration.simulatedLearners).toBe(100);
+    expect(comparison.learningStudy).toMatchObject({
+      learningStudyKind: "full-population",
+      representedPopulation: 100,
+      simulatedLearners: 100,
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(await loadPopulationBundle(1_000_000)).toBe(large);
+    expect(await loadPopulationBundle(100)).toBe(comparison);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
