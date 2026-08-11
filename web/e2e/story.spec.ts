@@ -175,6 +175,13 @@ test("Start reveals a waiting network and concepts unlock one act at a time", as
     "116.989568 minutes",
   );
   const canvas = page.locator("#congestion-canvas");
+  if ((await page.locator("body").getAttribute("data-webgl")) === "active") {
+    await expect(canvas).toHaveAttribute(
+      "data-scene-prewarm",
+      /complete|synchronous/,
+    );
+    await expect(canvas).toHaveAttribute("data-scene-display-warm", "complete");
+  }
   await expect(canvas).toHaveAttribute("data-node-core-color", "#ffffff");
   await expect(canvas).toHaveAttribute("data-endpoint-node-radius", "0.148");
   await expect(canvas).toHaveAttribute("data-junction-node-radius", "0.13");
@@ -191,6 +198,28 @@ test("Start reveals a waiting network and concepts unlock one act at a time", as
   expect(flowEncoding.heavyColor).not.toBe(flowEncoding.lightColor);
   await expect(page.locator('[data-proceed-act="3"]')).toBeVisible();
   await page.screenshot({ path: "e2e/screenshots/learning-complete.png" });
+  await proceedFrom(page, 3);
+  await expect(stage).toHaveAttribute("data-scene-mode", "landscape");
+  if ((await page.locator("body").getAttribute("data-webgl")) === "active") {
+    await expect(canvas).toHaveAttribute(
+      "data-trajectory-reveal-complete",
+      "false",
+    );
+    const initialReveal = Number(
+      await canvas.getAttribute("data-trajectory-reveal"),
+    );
+    expect(initialReveal).toBeLessThan(0.2);
+    await expect
+      .poll(
+        async () => Number(await canvas.getAttribute("data-trajectory-reveal")),
+        { timeout: 4_000 },
+      )
+      .toBeGreaterThan(0.25);
+    await expect(canvas).toHaveAttribute(
+      "data-trajectory-reveal-complete",
+      "false",
+    );
+  }
   expect(errors).toEqual([]);
 });
 
@@ -208,7 +237,7 @@ test("the complete guided journey preserves exact closed, tolled, and replay sta
   await expect(stage).toHaveAttribute("data-trajectory", "best-response");
   await expect(canvas).toHaveAttribute("data-directional-arrows", "downhill");
   await expect(page.locator("#potential")).toContainText(
-    "strict-improvement sequence",
+    "sequence of strict improvements",
   );
   await expectVisibleElementsInsideViewport(
     page,
@@ -265,6 +294,9 @@ test("the complete guided journey preserves exact closed, tolled, and replay sta
   await expect(stage).toHaveAttribute("data-scenario", "braess-closed");
   await expect(stage).toHaveAttribute("data-shortcut", "closed");
   await expect(stage).toHaveAttribute("data-route-counts", "50000,50000");
+  await expect(
+    page.getByRole("button", { name: "Focus shortcut" }),
+  ).toBeHidden();
   await expect(page.locator("#metric-routes")).toHaveText(
     "50,000 / 50,000 / 0",
   );
@@ -287,7 +319,7 @@ test("the complete guided journey preserves exact closed, tolled, and replay sta
   await proceedFrom(page, 7);
   await expect(page.locator("#learner-table tbody tr")).toHaveCount(3);
   await expect(page.locator(".comparison-scope")).toContainText(
-    "fully replicated 100-commuter study",
+    "fully replicated study with 100 commuters",
   );
   await page.screenshot({
     path: "e2e/screenshots/desktop-act8-comparison.png",
@@ -393,7 +425,7 @@ test("all population choices load distinct computed trajectories without stale v
     "full-population",
   );
   await expect(page.locator("#learning-study-note")).toContainText(
-    "full-population study with 1,000 separate independent Q-learners",
+    "covers the full population with 1,000 separate independent learners",
   );
   await runLearningToCompletion(page);
   await expect(page.locator("#stage")).toHaveAttribute(
@@ -410,7 +442,7 @@ test("all population choices load distinct computed trajectories without stale v
     "waiting",
   );
   await expect(page.locator("#learning-study-note")).toContainText(
-    "full-population study with 10,000 separate independent Q-learners",
+    "covers the full population with 10,000 separate independent learners",
   );
   await runLearningToCompletion(page);
   await expect(page.locator("#stage")).toHaveAttribute(

@@ -67,6 +67,8 @@ export async function unlockThrough(
       if (state !== "complete") await runLearningToCompletion(page);
     }
     await proceedFrom(page, active);
+    const closeVisualization = page.locator("#close-mobile-visualization");
+    if (await closeVisualization.isVisible()) await closeVisualization.click();
     active += 1;
   }
 }

@@ -261,6 +261,11 @@ button:disabled {
   opacity: 0.48;
 }
 
+.mobile-visualization-trigger,
+.mobile-visualization-close {
+  display: none;
+}
+
 .stage button[aria-pressed="true"],
 .route-definitions button[aria-pressed="true"],
 .population-options button[aria-pressed="true"] {
@@ -741,6 +746,18 @@ h3 {
   stroke: #777;
 }
 
+.story-chart .chart-label-primary {
+  fill: var(--orange);
+}
+
+.story-chart .chart-label-secondary {
+  fill: var(--amber);
+}
+
+.story-chart .chart-label-muted {
+  fill: #999;
+}
+
 .story-chart .chart-reference {
   stroke: #666;
   stroke-dasharray: 4 4;
@@ -847,6 +864,56 @@ th {
   text-align: center;
 }
 
+.fallback-landscape-surface {
+  fill: url(#fallback-surface-fill);
+  fill-opacity: 0.52;
+  stroke: #f39a59;
+  stroke-width: 1.5;
+}
+
+.fallback-landscape-grid path {
+  stroke: #ffc07a;
+  stroke-width: 0.9;
+  opacity: 0.32;
+}
+
+[data-fallback-learning],
+[data-fallback-descent] {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+[data-fallback-learning] {
+  stroke: #fff1d0;
+  stroke-width: 3;
+  opacity: 0.58;
+}
+
+[data-fallback-descent] {
+  stroke: #ffb45b;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 5px rgb(255 125 62 / 55%));
+}
+
+[data-fallback-equilibrium] {
+  fill: #ff7a3d;
+  stroke: #fff4dc;
+  stroke-width: 1.5;
+}
+
+[data-fallback-optimum] {
+  fill: none;
+  stroke: #ffd9a6;
+  stroke-width: 4;
+}
+
+.fallback-landscape-labels {
+  fill: #b6b6b6;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
 .fallback-flow-bodies path,
 .fallback-flow-glows path,
 .fallback-flow-highlights path {
@@ -907,6 +974,49 @@ th {
   .visual-column {
     position: relative;
     padding: 0.3rem 0 0;
+  }
+
+  .mobile-visualization-trigger {
+    display: inline-flex;
+    min-height: 44px;
+    margin: 0.4rem 0 1.25rem;
+    padding: 0.56rem 0.76rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line-strong);
+    background: var(--near-black);
+    color: var(--white);
+    font-family: var(--sans);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  body.mobile-visualization-open {
+    overflow: hidden;
+  }
+
+  body.mobile-visualization-open .visual-column {
+    position: fixed;
+    z-index: 80;
+    inset: 0;
+    display: flex;
+    padding: 0.65rem 1rem 1rem;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    background: #000;
+  }
+
+  body.mobile-visualization-open .stage {
+    width: min(100%, 700px);
+    margin: auto 0;
+  }
+
+  body.mobile-visualization-open .mobile-visualization-close {
+    display: inline-flex;
+    min-width: 9rem;
   }
 
   .stage {

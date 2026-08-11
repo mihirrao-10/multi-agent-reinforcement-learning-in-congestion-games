@@ -37,7 +37,7 @@ export function createLearnerChart(
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}` });
   appendTitleAndDescription(
     svg,
-    "One-hundred-agent tolled learner comparison",
+    "Tolled learner comparison with one hundred agents",
     "Separate scales compare exported physical social cost and final exploitability for three methods with different information.",
   );
   const socialLabel = svgElement("text", {
@@ -45,7 +45,7 @@ export function createLearnerChart(
     y: 20,
     class: "chart-axis",
   });
-  socialLabel.textContent = `social cost in commuter-minutes (${minimumCost} to ${maximumCost})`;
+  socialLabel.textContent = `social cost in commuter minutes (${minimumCost} to ${maximumCost})`;
   const exploitLabel = svgElement("text", {
     x: 370,
     y: 20,

@@ -30,6 +30,11 @@ export class SceneController {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(36, 1, 0.02, 80);
   private readonly network = new CongestionScene();
+  private readonly trajectoryArrowGeometry = new THREE.ConeGeometry(
+    0.035,
+    0.09,
+    8,
+  );
   private landscape: PotentialLandscape;
   private readonly controls: OrbitController;
   private readonly labels: ProjectedLabels;
@@ -77,7 +82,10 @@ export class SceneController {
     const rim = new THREE.DirectionalLight(0x7f8fa8, 0.68);
     rim.position.set(3.5, 1.8, -4);
     this.scene.add(key, rim);
-    this.landscape = new PotentialLandscape(story);
+    this.landscape = new PotentialLandscape(
+      story,
+      this.trajectoryArrowGeometry,
+    );
     this.scene.add(this.network.group, this.landscape.group);
     this.labels = new ProjectedLabels(labelContainer);
     for (const [label, position] of Object.entries(NODE_POSITIONS)) {
@@ -127,7 +135,61 @@ export class SceneController {
     this.resizeObserver.observe(canvas);
     document.addEventListener("visibilitychange", this.onVisibilityChange);
     this.resize();
+  }
+
+  async startRendering(): Promise<void> {
+    if (this.animationFrame !== 0 || this.disposed) return;
+    this.canvas.dataset.scenePrewarm = "pending";
+    const warmupMaterial = new THREE.MeshBasicMaterial({
+      color: "#ffd38a",
+      depthTest: true,
+      transparent: true,
+      opacity: 0,
+    });
+    const warmupArrow = new THREE.Mesh(
+      this.trajectoryArrowGeometry,
+      warmupMaterial,
+    );
+    warmupArrow.frustumCulled = false;
+    this.scene.add(warmupArrow);
+    this.network.group.visible = true;
+    this.landscape.group.visible = true;
+    this.landscape.setActiveMarkerVisible(true);
+    try {
+      await this.renderer.compileAsync(this.scene, this.camera);
+      // The title screen still covers the canvas here. One real render uploads
+      // the large surface and arrow program before the first landscape reveal.
+      this.renderer.render(this.scene, this.camera);
+      this.canvas.dataset.scenePrewarm = "complete";
+    } catch {
+      // A synchronous render remains a safe warmup on browsers without the
+      // parallel shader compilation extension.
+      this.renderer.render(this.scene, this.camera);
+      this.canvas.dataset.scenePrewarm = "synchronous";
+    } finally {
+      this.scene.remove(warmupArrow);
+      warmupMaterial.dispose();
+      this.landscape.setActiveMarkerVisible(false);
+      this.landscape.group.visible = false;
+    }
+    this.clock.start();
     this.animate();
+  }
+
+  warmLandscapeAtDisplaySize(): void {
+    if (this.disposed || this.canvas.clientWidth <= 1) return;
+    this.resize();
+    const networkVisible = this.network.group.visible;
+    const landscapeVisible = this.landscape.group.visible;
+    this.applyGroupOpacity(this.network.group, 1);
+    this.applyGroupOpacity(this.landscape.group, 0);
+    this.network.group.visible = true;
+    this.landscape.group.visible = true;
+    this.renderer.render(this.scene, this.camera);
+    this.network.group.visible = networkVisible;
+    this.landscape.group.visible = landscapeVisible;
+    this.canvas.dataset.sceneDisplayWarm = "complete";
+    this.needsRender = true;
   }
 
   setState(
@@ -162,6 +224,7 @@ export class SceneController {
         (trajectoryLength - 1),
     );
     this.landscape.setTrajectory(trajectoryName, activeTrajectoryIndex);
+    this.landscape.setActiveMarkerVisible(state.activeChapter === 4);
     this.labels.setMode(state.sceneMode);
     this.equilibriumLabel.textContent = "Nash equilibrium";
     const optimumCount = this.bundle.potentialLandscape.markers.optima.length;
@@ -187,11 +250,20 @@ export class SceneController {
     this.canvas.dataset.scenario = state.scenario;
     this.canvas.dataset.shortcut = state.shortcutOpen ? "open" : "closed";
     this.canvas.dataset.tolls = state.tollsActive ? "active" : "inactive";
+    this.canvas.dataset.trajectoryReveal = this.landscape
+      .trajectoryRevealProgress()
+      .toFixed(3);
+    this.canvas.dataset.trajectoryRevealComplete = String(
+      this.landscape.trajectoryRevealComplete(),
+    );
     this.canvas.dataset.episode =
       snapshot && "episode" in snapshot ? String(snapshot.episode) : "";
-    this.canvas.dataset.routeCounts = snapshot
-      ? snapshot.routeCounts.join(",")
-      : "waiting";
+    this.canvas.dataset.routeCounts =
+      state.activeChapter === 4
+        ? "strict-improvement-trajectory"
+        : snapshot
+          ? snapshot.routeCounts.join(",")
+          : "waiting";
     this.canvas.dataset.population = String(state.population);
     this.canvas.dataset.flowRendering = "continuous-tubes";
     this.canvas.dataset.learningStudyKind =
@@ -263,14 +335,23 @@ export class SceneController {
     this.network.focus(route);
   }
 
+  restartTrajectoryReveal(): void {
+    this.needsRender = true;
+    this.landscape.restartTrajectoryReveal();
+  }
+
   setBundle(bundle: PopulationBundle): void {
     if (bundle === this.bundle) return;
     this.needsRender = true;
     this.scene.remove(this.landscape.group);
     this.landscape.dispose();
     this.bundle = bundle;
-    this.landscape = new PotentialLandscape(bundle);
+    this.landscape = new PotentialLandscape(
+      bundle,
+      this.trajectoryArrowGeometry,
+    );
     this.scene.add(this.landscape.group);
+    this.warmLandscapeAtDisplaySize();
     this.activeChapter = -1;
     this.updateLandscapeLabels();
   }
@@ -284,6 +365,7 @@ export class SceneController {
     this.controls.dispose();
     this.network.dispose();
     this.landscape.dispose();
+    this.trajectoryArrowGeometry.dispose();
     this.labels.dispose();
     this.renderer.dispose();
   }
@@ -356,6 +438,12 @@ export class SceneController {
       .toFixed(4);
     this.canvas.dataset.potentialMorphComplete = String(
       this.landscape.morphComplete(),
+    );
+    this.canvas.dataset.trajectoryReveal = this.landscape
+      .trajectoryRevealProgress()
+      .toFixed(3);
+    this.canvas.dataset.trajectoryRevealComplete = String(
+      this.landscape.trajectoryRevealComplete(),
     );
     this.canvas.dataset.animationFrame = String(
       Number(this.canvas.dataset.animationFrame ?? 0) + 1,

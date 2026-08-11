@@ -32,6 +32,11 @@ export function createRouteShareChart(
     "chart-line",
     "chart-line chart-line-muted",
   ];
+  const labelClasses = [
+    "chart-label chart-label-secondary",
+    "chart-label chart-label-primary",
+    "chart-label chart-label-muted",
+  ];
   const labels = ["Upper", "Lower", "Shortcut"];
   for (let route = 0; route < 3; route += 1) {
     const path = svgElement("path", {
@@ -44,10 +49,9 @@ export function createRouteShareChart(
       class: classes[route]!,
     });
     const label = svgElement("text", {
-      x: width - margin.right,
-      y: 14 + route * 12,
-      "text-anchor": "end",
-      class: "chart-label",
+      x: 310 + route * 66,
+      y: 12,
+      class: labelClasses[route]!,
     });
     label.textContent = labels[route]!;
     svg.append(path, label);

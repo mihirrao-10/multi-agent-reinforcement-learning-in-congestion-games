@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { arrowDirectionIsDescending } from "../src/scene/potential-landscape";
+import {
+  PotentialLandscape,
+  arrowDirectionIsDescending,
+} from "../src/scene/potential-landscape";
 import { loadFixture } from "./fixtures";
 
 describe("potential landscape topology", () => {
@@ -36,6 +39,28 @@ describe("potential landscape topology", () => {
       ]!;
     expect(arrowDirectionIsDescending(points)).toBe(true);
     expect(points.at(-1)?.routeCounts).toEqual([1, 1, 98]);
+  });
+
+  it("reveals strict-improvement paths gradually and honors reduced motion", () => {
+    const animated = new PotentialLandscape(loadFixture());
+    animated.setTrajectory("braess-open-best-response", 64);
+    expect(animated.trajectoryRevealProgress()).toBe(0);
+    expect(animated.trajectoryRevealComplete()).toBe(false);
+    animated.update(false, 0.45);
+    expect(animated.trajectoryRevealProgress()).toBe(0);
+    animated.update(false, 3.1);
+    expect(animated.trajectoryRevealProgress()).toBeCloseTo(0.5, 5);
+    animated.update(false, 3.1);
+    expect(animated.trajectoryRevealProgress()).toBe(1);
+    expect(animated.trajectoryRevealComplete()).toBe(true);
+    animated.dispose();
+
+    const reduced = new PotentialLandscape(loadFixture());
+    reduced.setTrajectory("braess-open-best-response", 64);
+    reduced.update(true, 0.016);
+    expect(reduced.trajectoryRevealProgress()).toBe(1);
+    expect(reduced.trajectoryRevealComplete()).toBe(true);
+    reduced.dispose();
   });
 
   it("keeps exact markers separate from sampled large surfaces", () => {

@@ -72,14 +72,43 @@ test("the continuous SVG fallback follows waiting, learning, population, closed,
   expect(flowAudit.shortcutColor).toBe("rgb(255, 110, 72)");
   expect(flowAudit.nodeFill).toBe("rgb(255, 255, 255)");
   await proceedFrom(page, 3);
+  await expect(fallback).toHaveAttribute("data-scene-mode", "landscape");
+  await expect(fallback.locator(".fallback-network-view")).toBeHidden();
+  await expect(fallback.locator(".fallback-landscape-view")).toBeVisible();
+  await expect(fallback.locator("[data-fallback-descent]")).toBeVisible();
+  const markerPositions = await fallback.evaluate((element) => {
+    const center = (selector: string) => {
+      const box = (
+        element.querySelector(selector) as SVGGraphicsElement
+      ).getBBox();
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    };
+    return {
+      equilibrium: center("[data-fallback-equilibrium]"),
+      optimum: center("[data-fallback-optimum]"),
+    };
+  });
+  expect(markerPositions.equilibrium.x).toBeCloseTo(280, 0);
+  expect(markerPositions.equilibrium.y).toBeCloseTo(38, 0);
+  expect(markerPositions.optimum.x).toBeCloseTo(284, 0);
+  expect(markerPositions.optimum.y).toBeCloseTo(238, 0);
+  await page.screenshot({ path: "e2e/screenshots/fallback-landscape.png" });
   await proceedFrom(page, 4);
+  await expect(fallback.locator("[data-fallback-descent]")).toBeHidden();
+  await expect(fallback.locator("[data-fallback-learning]")).toBeVisible();
   await proceedFrom(page, 5);
+  await expect(fallback).toHaveAttribute("data-scene-mode", "network");
+  await expect(fallback.locator(".fallback-network-view")).toBeVisible();
+  await expect(fallback.locator(".fallback-landscape-view")).toBeHidden();
   await expect(page.locator("#stage")).toHaveAttribute(
     "data-route-counts",
     "500,500",
   );
   await expect(fallback.locator('[data-edge="UV"]')).toHaveCSS("opacity", "0");
   await proceedFrom(page, 6);
+  await expect(fallback).toHaveAttribute("data-scene-mode", "landscape");
+  await expect(fallback.locator("[data-fallback-equilibrium]")).toBeHidden();
+  await expect(fallback.locator("[data-fallback-optimum]")).toBeVisible();
   await expect(page.locator("#stage")).toHaveAttribute(
     "data-route-counts",
     "500,500,0",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createLearningChart } from "../src/charts/learning-chart";
+import { createRouteShareChart } from "../src/charts/route-share-chart";
 import { linePath, linearScale } from "../src/charts/svg-utils";
 import { loadFixture } from "./fixtures";
 
@@ -28,5 +29,27 @@ describe("native SVG charts", () => {
     expect(svg?.querySelector("title")?.textContent).toContain("Q-learning");
     handle.updateCursor(5000);
     expect(svg?.dataset.currentEpisode).toBe("5000");
+  });
+
+  it("keeps the route legend above the plot and maps labels to line colors", () => {
+    const container = document.createElement("div");
+    const snapshots =
+      loadFixture().learning.scenarios["braess-open"].representative.snapshots;
+    createRouteShareChart(container, snapshots);
+    const labels = [
+      ...container.querySelectorAll<SVGTextElement>("text"),
+    ].filter((label) =>
+      ["Upper", "Lower", "Shortcut"].includes(label.textContent ?? ""),
+    );
+    expect(labels.map((label) => label.getAttribute("y"))).toEqual([
+      "12",
+      "12",
+      "12",
+    ]);
+    expect(labels.map((label) => label.getAttribute("class"))).toEqual([
+      "chart-label chart-label-secondary",
+      "chart-label chart-label-primary",
+      "chart-label chart-label-muted",
+    ]);
   });
 });

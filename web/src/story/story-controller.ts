@@ -82,6 +82,10 @@ export class StoryController {
 
   private readonly opening = requireElement<HTMLElement>("#opening-screen");
   private readonly main = requireElement<HTMLElement>("#story");
+  private readonly skipLink = requireElement<HTMLAnchorElement>(".skip-link");
+  private readonly visualColumn = requireElement<HTMLElement>(".visual-column");
+  private readonly storyChapters =
+    requireElement<HTMLElement>(".story-chapters");
   private readonly startButton =
     requireElement<HTMLButtonElement>("#start-journey");
   private readonly preparation = requireElement<HTMLElement>(
@@ -116,6 +120,11 @@ export class StoryController {
     requireElement<HTMLButtonElement>("#focus-primary");
   private readonly focusSecondary =
     requireElement<HTMLButtonElement>("#focus-secondary");
+  private readonly closeMobileVisualization = requireElement<HTMLButtonElement>(
+    "#close-mobile-visualization",
+  );
+  private readonly viewPotentialVisualization =
+    requireElement<HTMLButtonElement>("#view-potential-visualization");
   private readonly legend = requireElement<HTMLElement>("#network-legend");
   private readonly directionalPathLegend = requireElement<HTMLElement>(
     "#directional-path-legend",
@@ -152,6 +161,7 @@ export class StoryController {
       options.bundle.population,
     );
     this.bindControls();
+    window.addEventListener("resize", this.closeMobileVisualizationAtDesktop);
     const chapters = [
       ...document.querySelectorAll<HTMLElement>(".chapter[data-story-act]"),
     ];
@@ -169,9 +179,14 @@ export class StoryController {
 
   dispose(): void {
     cancelAnimationFrame(this.animationFrame);
+    this.closeMobileVisualizationView(false);
     this.observer.destroy();
     window.removeEventListener("keydown", this.guardLockedNavigation);
     window.removeEventListener("hashchange", this.guardHashNavigation);
+    window.removeEventListener(
+      "resize",
+      this.closeMobileVisualizationAtDesktop,
+    );
   }
 
   syncExplore(exploring: boolean): void {
@@ -205,8 +220,9 @@ export class StoryController {
     if (this.journey.started) return;
     this.clearHash();
     this.dispatchJourney({ type: "START" });
-    this.opening.hidden = true;
     this.main.hidden = false;
+    this.scene?.warmLandscapeAtDisplaySize();
+    this.opening.hidden = true;
     document.body.classList.remove("journey-locked");
     document.body.dataset.journeyStarted = "true";
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -242,7 +258,9 @@ export class StoryController {
     this.dispatchJourney({ type: "PROCEED" });
     if (this.journey.maxUnlockedAct === before) return;
     const next = this.journey.maxUnlockedAct;
-    const chapter = requireElement<HTMLElement>(`[data-story-act="${next}"]`);
+    const chapter = requireElement<HTMLElement>(
+      `.chapter[data-story-act="${next}"]`,
+    );
     chapter.hidden = false;
     this.activateAct(next);
     const title =
@@ -250,6 +268,7 @@ export class StoryController {
       "Next chapter";
     this.chapterStatus.textContent = `${title} unlocked.`;
     this.observer.refresh();
+    if (next === 4) this.openMobileVisualization();
     chapter.scrollIntoView({
       behavior: this.visual.reducedMotion ? "auto" : "smooth",
       block: "start",
@@ -375,6 +394,11 @@ export class StoryController {
       this.bundle.population,
       presentation === null,
     );
+    this.fallback?.setMode(
+      sceneState.sceneMode,
+      sceneState.trajectory,
+      sceneState.tollsActive,
+    );
     this.renderDataAttributes(sceneState, presentation);
     this.renderControls(sceneState);
     this.renderMetrics(presentation);
@@ -388,6 +412,43 @@ export class StoryController {
     }
     if (announce) this.announceState(presentation);
   }
+
+  private openMobileVisualization(): void {
+    if (!window.matchMedia("(max-width: 860px)").matches) return;
+    document.body.classList.add("mobile-visualization-open");
+    this.visualColumn.setAttribute("role", "dialog");
+    this.visualColumn.setAttribute("aria-modal", "true");
+    this.visualColumn.setAttribute(
+      "aria-label",
+      "Active congestion game visualization",
+    );
+    this.storyChapters.inert = true;
+    this.skipLink.inert = true;
+    this.closeMobileVisualization.hidden = false;
+    this.closeMobileVisualization.focus({ preventScroll: true });
+  }
+
+  private closeMobileVisualizationView(restoreFocus = true): void {
+    if (!document.body.classList.contains("mobile-visualization-open")) return;
+    document.body.classList.remove("mobile-visualization-open");
+    this.visualColumn.removeAttribute("role");
+    this.visualColumn.removeAttribute("aria-modal");
+    this.visualColumn.setAttribute(
+      "aria-label",
+      "Persistent experiment visualization",
+    );
+    this.storyChapters.inert = false;
+    this.skipLink.inert = false;
+    this.closeMobileVisualization.hidden = true;
+    if (restoreFocus) {
+      this.viewPotentialVisualization.focus({ preventScroll: true });
+    }
+  }
+
+  private readonly closeMobileVisualizationAtDesktop = (): void => {
+    if (window.matchMedia("(max-width: 860px)").matches) return;
+    this.closeMobileVisualizationView(false);
+  };
 
   private renderDataAttributes(
     state: StoryState,
@@ -406,9 +467,12 @@ export class StoryController {
       presentation && "episode" in presentation
         ? String(presentation.episode)
         : "";
-    this.stage.dataset.routeCounts = presentation
-      ? presentation.routeCounts.join(",")
-      : "waiting";
+    this.stage.dataset.routeCounts =
+      this.journey.activeAct === 4
+        ? "strict-improvement-trajectory"
+        : presentation
+          ? presentation.routeCounts.join(",")
+          : "waiting";
     this.stage.dataset.population = String(this.bundle.population);
     this.stage.dataset.flowRendering = "continuous-tubes";
     this.stage.dataset.learningStudyKind =
@@ -429,6 +493,10 @@ export class StoryController {
     this.stage.dataset.surface = state.tollsActive
       ? "physical-social-cost"
       : "rosenthal-potential";
+    const activeChapter = requireElement<HTMLElement>(
+      `.chapter[data-story-act="${this.journey.activeAct}"]`,
+    );
+    this.skipLink.href = `#${activeChapter.id}`;
   }
 
   private renderControls(state: StoryState): void {
@@ -437,9 +505,15 @@ export class StoryController {
       ? "Exit Explore view"
       : "Explore view";
     this.explore.setAttribute("aria-pressed", String(state.userExploring));
+    const cameraAvailable = this.scene !== null;
+    this.explore.disabled = !cameraAvailable;
+    this.reset.disabled = !cameraAvailable;
     const landscape = state.sceneMode === "landscape";
-    this.focusPrimary.hidden = this.journey.activeAct < 1;
+    this.focusPrimary.hidden =
+      this.journey.activeAct < 1 || (!landscape && !state.shortcutOpen);
     this.focusSecondary.hidden = this.journey.activeAct < 2;
+    this.focusPrimary.disabled = !cameraAvailable;
+    this.focusSecondary.disabled = !cameraAvailable;
     this.focusPrimary.textContent = landscape
       ? "Focus equilibrium"
       : "Focus shortcut";
@@ -490,15 +564,22 @@ export class StoryController {
   private renderMetrics(presentation: NetworkPresentation | null): void {
     const concepts = conceptVisibility(this.journey);
     const hasPresentation = presentation !== null;
+    const trajectoryAnimating = this.journey.activeAct === 4;
     const episodeVisible =
-      hasPresentation && "episode" in presentation && concepts.learningMetrics;
+      hasPresentation &&
+      !trajectoryAnimating &&
+      "episode" in presentation &&
+      concepts.learningMetrics;
     const routesVisible =
       hasPresentation &&
+      !trajectoryAnimating &&
       (concepts.learningMetrics || this.journey.activeAct >= 5);
     const latencyVisible =
       hasPresentation &&
+      !trajectoryAnimating &&
       (concepts.learningMetrics || this.journey.activeAct >= 5);
-    const exploitabilityVisible = hasPresentation && concepts.exploitability;
+    const exploitabilityVisible =
+      hasPresentation && !trajectoryAnimating && concepts.exploitability;
     const visibility: Record<string, boolean> = {
       episode: episodeVisible,
       routes: routesVisible,
@@ -537,25 +618,30 @@ export class StoryController {
       const sampled =
         this.bundle.potentialLandscape.sampling.mode !==
         "complete-count-lattice";
-      this.caption.textContent = this.visual.tollsActive
-        ? `Tolled potential equals physical social cost. The marker uses exact profile ${profileText(presentation.routeCounts)}.`
-        : this.visual.trajectory === "best-response"
-          ? `${sampled ? "A sampled view of" : ""} Rosenthal potential. The arrows point toward decreasing potential.`
-          : `${sampled ? "A sampled view of" : ""} Rosenthal potential. The pale Q-learning trace is not monotone.`;
-      this.description.textContent = `Potential landscape for ${this.bundle.population.toLocaleString()} commuters. Active exact profile ${profileText(presentation.routeCounts)}. ${this.bundle.potentialLandscape.sampling.statement} ${this.studyDisclosure()}`;
+      const samplingLead = sampled ? "A sampled view of " : "";
+      if (this.visual.trajectory === "best-response") {
+        this.caption.textContent = `${samplingLead}Rosenthal potential. The path reveals a strict improvement sequence toward a Nash equilibrium.`;
+        this.description.textContent = `Potential landscape for ${this.bundle.population.toLocaleString()} commuters. A moving sphere follows exact asynchronous best response checkpoints downhill toward a Nash equilibrium. ${this.bundle.potentialLandscape.sampling.statement}`;
+      } else if (this.visual.tollsActive) {
+        this.caption.textContent = `Tolled potential equals physical social cost. The ring marks exact profile ${profileText(presentation.routeCounts)}.`;
+        this.description.textContent = `Tolled potential landscape for ${this.bundle.population.toLocaleString()} commuters. The ring marks exact equilibrium profile ${profileText(presentation.routeCounts)}, which is also socially optimal. ${this.bundle.potentialLandscape.sampling.statement}`;
+      } else {
+        this.caption.textContent = `${samplingLead}Rosenthal potential. The pale Q-learning trace is not monotone, while the diamond marks an exact Nash equilibrium.`;
+        this.description.textContent = `Potential landscape for ${this.bundle.population.toLocaleString()} commuters. The pale line is the exported Q-learning trace, and the diamond marks exact equilibrium profile ${profileText(presentation.routeCounts)}. ${this.bundle.potentialLandscape.sampling.statement} ${this.studyDisclosure()}`;
+      }
     } else if (!this.visual.shortcutOpen) {
       this.caption.textContent = `The shortcut is unavailable. Upper and Lower split all ${this.bundle.population.toLocaleString()} commuters at equilibrium.`;
       this.description.textContent = `Shortcut removed. Exact equilibrium route counts ${presentation.routeCounts.join(", ")}, average latency ${formatNumber(presentation.averagePhysicalLatency)} minutes. Thicker and redder flow carries a larger traffic share.`;
     } else if (this.visual.tollsActive) {
       this.caption.textContent = `The shortcut is restored. Toll rings change private cost, while road color and thickness still show traffic share.`;
-      this.description.textContent = `Marginal-cost tolls active for ${this.bundle.population.toLocaleString()} commuters. Exact equilibrium ${profileText(presentation.routeCounts)}, physical average latency ${formatNumber(presentation.averagePhysicalLatency)} minutes. Continuous light moves from each road's source toward its target.`;
+      this.description.textContent = `Tolls based on marginal cost are active for ${this.bundle.population.toLocaleString()} commuters. Exact equilibrium ${profileText(presentation.routeCounts)}, physical average latency ${formatNumber(presentation.averagePhysicalLatency)} minutes. Continuous light moves from each road's source toward its target.`;
     } else {
       const episode =
         "episode" in presentation
           ? ` Episode ${presentation.episode.toLocaleString()}.`
           : "";
-      this.caption.textContent = `${this.isSampledStudy() ? "Learning path estimated from 10,000 independently simulated commuters" : `Learning uses an exported full-population path for ${this.bundle.population.toLocaleString()} commuters`}.${episode}`;
-      this.description.textContent = `The network represents ${this.bundle.population.toLocaleString()} commuters. Shortcut open. Route counts ${presentation.routeCounts.join(", ")}; average physical latency ${formatNumber(presentation.averagePhysicalLatency)} minutes.${episode} Thin green flow means a smaller traffic share, thicker bright-red flow means a larger traffic share, and layered moving pulses show direction. The central shortcut has zero direct latency. ${this.studyDisclosure()}`;
+      this.caption.textContent = `${this.isSampledStudy() ? "Learning path estimated from 10,000 independently simulated commuters" : `Learning uses an exported path across all ${this.bundle.population.toLocaleString()} commuters`}.${episode}`;
+      this.description.textContent = `The network represents ${this.bundle.population.toLocaleString()} commuters. Shortcut open. Route counts ${presentation.routeCounts.join(", ")}; average physical latency ${formatNumber(presentation.averagePhysicalLatency)} minutes.${episode} Thin green flow means a smaller traffic share, thicker bright red flow means a larger traffic share, and layered moving pulses show direction. The central shortcut has zero direct latency. ${this.studyDisclosure()}`;
     }
     this.canvas.setAttribute("aria-label", this.description.textContent);
   }
@@ -654,7 +740,7 @@ export class StoryController {
       [
         "independent Q-learning",
         block.qLearning.representativeSummary,
-        "empirical epsilon-zero greedy evaluation",
+        "empirical greedy evaluation at epsilon zero",
       ],
       [
         "strict best response",
@@ -662,9 +748,9 @@ export class StoryController {
         "exact potential descent to pure Nash",
       ],
       [
-        "full-information Hedge",
+        "Hedge with full information",
         block.hedge.representativeSummary,
-        "external-regret control, not last-iterate Nash",
+        "control for external regret, not convergence of the final iterate to Nash",
       ],
     ];
     const body = requireElement<HTMLTableSectionElement>(
@@ -676,7 +762,7 @@ export class StoryController {
         [
           name,
           profileText(summary.finalGreedyRouteCounts),
-          `${formatNumber(summary.physicalSocialCost)} commuter-minutes`,
+          `${formatNumber(summary.physicalSocialCost)} commuter minutes`,
           `${formatNumber(summary.exploitability)} minutes`,
           statement,
         ].forEach((value) => {
@@ -696,7 +782,8 @@ export class StoryController {
     }
     if (this.comparisonRequest) return this.comparisonRequest;
     const status = requireElement<HTMLElement>("#comparison-loading");
-    status.textContent = "Loading the replicated 100-commuter comparison...";
+    status.textContent =
+      "Loading the replicated comparison with 100 commuters...";
     this.comparisonRequest = loadPopulationBundle(
       this.manifest.comparisonPopulation,
     )
@@ -728,7 +815,7 @@ export class StoryController {
   private studyDisclosure(): string {
     const study = this.bundle.learningStudy;
     if (!this.isSampledStudy()) {
-      return `This is a full-population study with ${study.simulatedLearners.toLocaleString()} separate independent Q-learners.`;
+      return `This study covers the full population with ${study.simulatedLearners.toLocaleString()} separate independent learners using Q-learning.`;
     }
     return `Learning path estimated from ${study.simulatedLearners.toLocaleString()} independently simulated commuters; exact markers use the full population of ${study.representedPopulation.toLocaleString()}.`;
   }
@@ -759,6 +846,13 @@ export class StoryController {
         this.visual.sceneMode === "landscape" ? "optimum" : "bottleneck";
       this.dispatchVisual({ type: "FOCUS", target }, true);
       this.scene?.focus(target);
+    });
+    this.closeMobileVisualization.addEventListener("click", () =>
+      this.closeMobileVisualizationView(),
+    );
+    this.viewPotentialVisualization.addEventListener("click", () => {
+      this.scene?.restartTrajectoryReveal();
+      this.openMobileVisualization();
     });
     document
       .querySelectorAll<HTMLButtonElement>("[data-proceed-act]")
@@ -837,6 +931,7 @@ export class StoryController {
   };
 
   private async fullReplay(): Promise<void> {
+    this.closeMobileVisualizationView(false);
     const defaultBundle = await loadPopulationBundle(
       this.manifest.defaultPopulation,
     );
@@ -899,6 +994,14 @@ export class StoryController {
   }
 
   private readonly guardLockedNavigation = (event: KeyboardEvent): void => {
+    if (
+      event.key === "Escape" &&
+      document.body.classList.contains("mobile-visualization-open")
+    ) {
+      event.preventDefault();
+      this.closeMobileVisualizationView();
+      return;
+    }
     if (this.journey.started) return;
     if (["End", "PageDown", "PageUp", "Home", " "].includes(event.key)) {
       event.preventDefault();

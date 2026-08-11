@@ -198,14 +198,6 @@ export class CongestionScene {
       halo.position.copy(position);
       halo.userData.nodeHalo = identifier;
       this.group.add(node, halo);
-      const light = new THREE.PointLight(
-        "#ffffff",
-        isEndpoint ? 0.2 : 0.13,
-        1.1,
-        2,
-      );
-      light.position.copy(position);
-      this.group.add(light);
     }
   }
 

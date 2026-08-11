@@ -42,6 +42,7 @@ async function start(): Promise<void> {
           onEscape: () => controller?.exitExplore(),
         },
       );
+      await scene.startRendering();
       document.body.dataset.webgl = "active";
     } catch (error) {
       console.warn(

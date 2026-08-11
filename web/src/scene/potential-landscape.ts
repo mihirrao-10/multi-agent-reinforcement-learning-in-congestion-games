@@ -3,6 +3,10 @@ import * as THREE from "three";
 import type { LandscapePoint, PopulationBundle } from "../data/story-schema";
 import { landscapeColor } from "./materials";
 
+const TRAJECTORY_REVEAL_DELAY_SECONDS = 0.45;
+const TRAJECTORY_REVEAL_DURATION_SECONDS = 6.2;
+const BEST_RESPONSE_TRAJECTORY = "braess-open-best-response";
+
 export function interpolateLandscapeHeight(
   original: number,
   tolled: number,
@@ -38,7 +42,11 @@ export class PotentialLandscape {
   });
   private readonly trajectoryGeometry = new THREE.BufferGeometry();
   private readonly trajectoryLine: THREE.Line;
+  private readonly trajectoryHeadGeometry = new THREE.BufferGeometry();
+  private readonly trajectoryHeadLine: THREE.Line;
   private readonly arrowGroup = new THREE.Group();
+  private readonly arrowGeometry: THREE.ConeGeometry;
+  private readonly ownsArrowGeometry: boolean;
   private readonly activeMarker: THREE.Mesh;
   private readonly equilibriumMarkers: THREE.Mesh[];
   private readonly optimumMarkers: THREE.Mesh[];
@@ -46,12 +54,23 @@ export class PotentialLandscape {
   private targetMorph = 0;
   private trajectory: readonly LandscapePoint[] = [];
   private trajectoryName = "";
+  private arrowTrajectoryName = "";
   private directionalArrows = false;
   private activeTrajectoryIndex = 0;
+  private trajectoryRevealProgressValue = 1;
+  private trajectoryRevealDelay = 0;
+  private trajectoryRevealActive = false;
+  private activeMarkerEnabled = false;
   private readonly cornerPoints: Record<"U" | "L" | "Z", LandscapePoint>;
 
-  constructor(bundle: PopulationBundle) {
+  constructor(
+    bundle: PopulationBundle,
+    sharedArrowGeometry?: THREE.ConeGeometry,
+  ) {
     this.bundle = bundle;
+    this.arrowGeometry =
+      sharedArrowGeometry ?? new THREE.ConeGeometry(0.035, 0.09, 8);
+    this.ownsArrowGeometry = sharedArrowGeometry === undefined;
     this.cornerPoints = {
       U: this.cornerPoint([bundle.population, 0, 0]),
       L: this.cornerPoint([0, bundle.population, 0]),
@@ -100,6 +119,11 @@ export class PotentialLandscape {
       this.trajectoryGeometry,
       this.trajectoryMaterial,
     );
+    this.trajectoryHeadLine = new THREE.Line(
+      this.trajectoryHeadGeometry,
+      this.trajectoryMaterial,
+    );
+    this.trajectoryHeadLine.visible = false;
     this.activeMarker = this.marker("active");
     this.equilibriumMarkers = bundle.potentialLandscape.markers.equilibria.map(
       () => this.marker("equilibrium"),
@@ -111,6 +135,7 @@ export class PotentialLandscape {
       surface,
       latticePoints,
       this.trajectoryLine,
+      this.trajectoryHeadLine,
       this.arrowGroup,
       this.activeMarker,
       ...this.equilibriumMarkers,
@@ -118,6 +143,16 @@ export class PotentialLandscape {
     );
     this.group.rotation.x = -0.18;
     this.setTrajectory("braess-open-q-learning", 0);
+    const bestResponse =
+      this.bundle.potentialLandscape.trajectories[BEST_RESPONSE_TRAJECTORY] ??
+      [];
+    if (bestResponse.length >= 2) {
+      this.rebuildArrows(
+        bestResponse.map((point) => this.positionForPoint(point)),
+      );
+      this.arrowTrajectoryName = BEST_RESPONSE_TRAJECTORY;
+      this.updateArrowVisibility(Number.NEGATIVE_INFINITY);
+    }
   }
 
   setTolled(active: boolean, immediate = false): void {
@@ -145,14 +180,27 @@ export class PotentialLandscape {
     this.trajectoryMaterial.color.set(bestResponse ? "#ffb45b" : "#fff1d0");
     this.trajectoryMaterial.opacity = bestResponse ? 0.92 : 0.55;
     if (trajectoryChanged) {
+      this.trajectoryRevealProgressValue = bestResponse ? 0 : 1;
+      this.trajectoryRevealDelay = bestResponse
+        ? TRAJECTORY_REVEAL_DELAY_SECONDS
+        : 0;
+      this.trajectoryRevealActive = bestResponse;
       this.updateTrajectoryGeometry();
-    } else if (this.activeTrajectoryIndex !== previousIndex) {
+    } else if (
+      this.activeTrajectoryIndex !== previousIndex &&
+      !this.trajectoryRevealActive
+    ) {
       this.positionActiveMarker();
     }
   }
 
   trajectoryLength(name: string): number {
     return this.bundle.potentialLandscape.trajectories[name]?.length ?? 0;
+  }
+
+  setActiveMarkerVisible(visible: boolean): void {
+    this.activeMarkerEnabled = visible;
+    this.activeMarker.visible = visible && this.trajectory.length > 0;
   }
 
   update(reducedMotion: boolean, frameSeconds: number): void {
@@ -164,7 +212,44 @@ export class PotentialLandscape {
       this.updateSurfaceGeometry();
       this.updateTrajectoryGeometry();
     }
+    if (this.trajectoryRevealActive) {
+      if (reducedMotion) {
+        this.trajectoryRevealProgressValue = 1;
+        this.trajectoryRevealActive = false;
+      } else if (this.trajectoryRevealDelay > 0) {
+        this.trajectoryRevealDelay = Math.max(
+          0,
+          this.trajectoryRevealDelay - frameSeconds,
+        );
+      } else {
+        this.trajectoryRevealProgressValue = Math.min(
+          1,
+          this.trajectoryRevealProgressValue +
+            frameSeconds / TRAJECTORY_REVEAL_DURATION_SECONDS,
+        );
+        if (this.trajectoryRevealProgressValue >= 1) {
+          this.trajectoryRevealActive = false;
+        }
+      }
+      this.updateTrajectoryRevealGeometry();
+    }
     this.positionMarkers();
+  }
+
+  trajectoryRevealProgress(): number {
+    return this.trajectoryRevealProgressValue;
+  }
+
+  trajectoryRevealComplete(): boolean {
+    return !this.trajectoryRevealActive;
+  }
+
+  restartTrajectoryReveal(): void {
+    if (!this.directionalArrows || this.trajectory.length < 2) return;
+    this.trajectoryRevealProgressValue = 0;
+    this.trajectoryRevealDelay = TRAJECTORY_REVEAL_DELAY_SECONDS;
+    this.trajectoryRevealActive = true;
+    this.updateTrajectoryRevealGeometry();
   }
 
   morphProgress(): number {
@@ -195,20 +280,13 @@ export class PotentialLandscape {
     this.material.dispose();
     this.pointMaterial.dispose();
     this.trajectoryGeometry.dispose();
+    this.trajectoryHeadGeometry.dispose();
     this.trajectoryMaterial.dispose();
     this.disposeMesh(this.activeMarker);
     this.equilibriumMarkers.forEach((marker) => this.disposeMesh(marker));
     this.optimumMarkers.forEach((marker) => this.disposeMesh(marker));
-    this.arrowGroup.children.forEach((arrow) => {
-      if (arrow instanceof THREE.Mesh) {
-        this.disposeMesh(
-          arrow as THREE.Mesh<
-            THREE.BufferGeometry,
-            THREE.Material | THREE.Material[]
-          >,
-        );
-      }
-    });
+    this.disposeArrowMaterials();
+    if (this.ownsArrowGeometry) this.arrowGeometry.dispose();
   }
 
   private updateSurfaceGeometry(): void {
@@ -240,8 +318,57 @@ export class PotentialLandscape {
   private updateTrajectoryGeometry(): void {
     const points = this.trajectory.map((point) => this.positionForPoint(point));
     this.trajectoryGeometry.setFromPoints(points);
-    this.positionActiveMarker();
-    this.rebuildArrows(this.directionalArrows ? points : []);
+    if (this.directionalArrows) {
+      if (this.arrowTrajectoryName !== this.trajectoryName) {
+        this.rebuildArrows(points);
+        this.arrowTrajectoryName = this.trajectoryName;
+      } else {
+        this.positionArrows(points);
+      }
+    } else {
+      this.updateArrowVisibility(Number.NEGATIVE_INFINITY);
+    }
+    this.updateTrajectoryRevealGeometry(points);
+  }
+
+  private updateTrajectoryRevealGeometry(
+    positionedPoints = this.trajectory.map((point) =>
+      this.positionForPoint(point),
+    ),
+  ): void {
+    if (positionedPoints.length === 0) {
+      this.trajectoryGeometry.setDrawRange(0, 0);
+      this.trajectoryHeadLine.visible = false;
+      this.activeMarker.visible = false;
+      return;
+    }
+    this.activeMarker.visible = this.activeMarkerEnabled;
+    if (!this.trajectoryRevealActive) {
+      this.trajectoryGeometry.setDrawRange(0, positionedPoints.length);
+      this.trajectoryHeadLine.visible = false;
+      this.positionActiveMarker();
+      this.updateArrowVisibility(
+        this.directionalArrows
+          ? positionedPoints.length - 1
+          : Number.NEGATIVE_INFINITY,
+      );
+      return;
+    }
+    const scaledProgress =
+      this.trajectoryRevealProgressValue * (positionedPoints.length - 1);
+    const firstIndex = Math.floor(scaledProgress);
+    const secondIndex = Math.min(positionedPoints.length - 1, firstIndex + 1);
+    const segmentProgress = scaledProgress - firstIndex;
+    const first = positionedPoints[firstIndex]!;
+    const second = positionedPoints[secondIndex]!;
+    const head = first.clone().lerp(second, segmentProgress);
+    this.trajectoryGeometry.setDrawRange(0, firstIndex + 1);
+    this.trajectoryHeadGeometry.setFromPoints([first, head]);
+    this.trajectoryHeadLine.visible = secondIndex > firstIndex;
+    this.activeMarker.position.copy(head);
+    this.updateArrowVisibility(
+      this.directionalArrows ? scaledProgress : Number.NEGATIVE_INFINITY,
+    );
   }
 
   private positionActiveMarker(): void {
@@ -250,16 +377,7 @@ export class PotentialLandscape {
   }
 
   private rebuildArrows(points: readonly THREE.Vector3[]): void {
-    this.arrowGroup.children.forEach((child) => {
-      if (child instanceof THREE.Mesh) {
-        this.disposeMesh(
-          child as THREE.Mesh<
-            THREE.BufferGeometry,
-            THREE.Material | THREE.Material[]
-          >,
-        );
-      }
-    });
+    this.disposeArrowMaterials();
     this.arrowGroup.clear();
     if (points.length < 2) return;
     const interval = Math.max(1, Math.floor((points.length - 1) / 10));
@@ -269,16 +387,67 @@ export class PotentialLandscape {
       const direction = current.clone().sub(previous);
       if (direction.lengthSq() < 1e-8) continue;
       const arrow = new THREE.Mesh(
-        new THREE.ConeGeometry(0.035, 0.09, 8),
-        new THREE.MeshBasicMaterial({ color: "#ffd38a", depthTest: true }),
+        this.arrowGeometry,
+        new THREE.MeshBasicMaterial({
+          color: "#ffd38a",
+          depthTest: true,
+          transparent: true,
+          opacity: 0,
+        }),
       );
       arrow.position.copy(current).add(new THREE.Vector3(0, 0.018, 0));
+      arrow.userData.trajectoryIndex = index;
       arrow.quaternion.setFromUnitVectors(
         new THREE.Vector3(0, 1, 0),
         direction.normalize(),
       );
       this.arrowGroup.add(arrow);
     }
+  }
+
+  private positionArrows(points: readonly THREE.Vector3[]): void {
+    this.arrowGroup.children.forEach((arrow) => {
+      const index = Number(arrow.userData.trajectoryIndex ?? -1);
+      if (index <= 0 || index >= points.length) return;
+      const previous = points[index - 1]!;
+      const current = points[index]!;
+      const direction = current.clone().sub(previous);
+      if (direction.lengthSq() < 1e-8) return;
+      arrow.position.copy(current).add(new THREE.Vector3(0, 0.018, 0));
+      arrow.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        direction.normalize(),
+      );
+    });
+  }
+
+  private updateArrowVisibility(visibleTrajectoryIndex: number): void {
+    this.arrowGroup.children.forEach((arrow) => {
+      const trajectoryIndex = Number(
+        arrow.userData.trajectoryIndex ?? Number.POSITIVE_INFINITY,
+      );
+      const reveal = THREE.MathUtils.smoothstep(
+        visibleTrajectoryIndex - trajectoryIndex,
+        0,
+        3,
+      );
+      const material = (arrow as THREE.Mesh).material as THREE.Material;
+      material.userData.baseOpacity = reveal;
+      material.opacity = reveal;
+      // Keep every cone renderable, even while transparent, so the GPU uploads
+      // them during the reveal delay instead of at first appearance.
+      arrow.visible = true;
+      arrow.scale.setScalar(1);
+    });
+  }
+
+  private disposeArrowMaterials(): void {
+    this.arrowGroup.children.forEach((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const material = child.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
+      else material.dispose();
+    });
   }
 
   private positionMarkers(): void {
@@ -348,6 +517,7 @@ export class PotentialLandscape {
           emissive: "#ff3030",
           emissiveIntensity: 1.25,
           roughness: 0.45,
+          transparent: true,
         }),
       );
     }
@@ -359,6 +529,7 @@ export class PotentialLandscape {
           emissive: "#f4b942",
           emissiveIntensity: 1.5,
           roughness: 0.4,
+          transparent: true,
         }),
       );
       marker.rotation.x = Math.PI / 2;
@@ -371,6 +542,7 @@ export class PotentialLandscape {
         emissive: "#ffb45b",
         emissiveIntensity: 2.2,
         roughness: 0.3,
+        transparent: true,
       }),
     );
   }

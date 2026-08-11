@@ -59,6 +59,13 @@ test("the progressive journey is keyboard-operable and semantically quiet while 
   await expect(
     page.getByRole("heading", { name: "A route is an action" }),
   ).toBeVisible();
+  const skipLink = page.getByRole("link", {
+    name: "Skip to the active chapter",
+  });
+  await expect(skipLink).toHaveAttribute("href", "#route-action");
+  await skipLink.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => new URL(page.url()).hash).toBe("#route-action");
   await page.getByRole("button", { name: /^Upper/ }).focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("#stage")).toHaveAttribute(
@@ -108,7 +115,7 @@ test("population changes announce the reset and expose readable control names", 
   );
   await expect(
     page.getByRole("button", { name: "Explore view" }),
-  ).toHaveAttribute("aria-pressed", "false");
+  ).toBeDisabled();
   await expect(page.locator("#scene-description")).toContainText(
     "1,000 commuters are represented at source S",
   );

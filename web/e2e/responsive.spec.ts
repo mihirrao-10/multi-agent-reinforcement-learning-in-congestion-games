@@ -3,6 +3,8 @@ import { expect, test } from "@playwright/test";
 import {
   expectNoHorizontalOverflow,
   expectNoIntersection,
+  proceedFrom,
+  runLearningToCompletion,
   startStory,
   unlockThrough,
   watchRuntimeErrors,
@@ -104,6 +106,39 @@ for (const viewport of viewports) {
         path: `e2e/screenshots/${viewport.name}-first-post-start.png`,
       });
       if (viewport.width === 390) {
+        await unlockThrough(page, 3);
+        await runLearningToCompletion(page);
+        await proceedFrom(page, 3);
+        await expect(page.locator("body")).toHaveClass(
+          /mobile-visualization-open/,
+        );
+        await expect(page.locator("#close-mobile-visualization")).toBeVisible();
+        await expect(page.locator("#congestion-canvas")).toBeInViewport();
+        await expect(page.locator("#stage")).toHaveAttribute(
+          "data-story-act",
+          "4",
+        );
+        await page.screenshot({
+          path: "e2e/screenshots/mobile-390x844-potential-overlay.png",
+        });
+        await page.locator("#close-mobile-visualization").click();
+        await expect(page.locator("body")).not.toHaveClass(
+          /mobile-visualization-open/,
+        );
+        await page.locator("#view-potential-visualization").click();
+        await page.setViewportSize({ width: 932, height: 430 });
+        await expect(page.locator("body")).not.toHaveClass(
+          /mobile-visualization-open/,
+        );
+        await expect(page.locator(".story-chapters")).not.toHaveAttribute(
+          "inert",
+        );
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.locator("#potential").scrollIntoViewIfNeeded();
+        await expect(page.locator("#stage")).toHaveAttribute(
+          "data-story-act",
+          "4",
+        );
         await unlockThrough(page, 10);
         await expect(
           page.getByRole("heading", { name: "Under the hood" }),
