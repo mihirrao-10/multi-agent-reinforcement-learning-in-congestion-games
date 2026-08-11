@@ -131,6 +131,9 @@ test("the title and fully unlocked journey pass automated WCAG A and AA checks",
   await page.getByRole("button", { name: "Start", exact: true }).click();
   await expectAxeClean(page);
   await unlockThrough(page, 10);
+  await expect(
+    page.locator("#tolls .equation-display").first(),
+  ).toHaveAttribute("tabindex", "0");
   await expectAxeClean(page);
 });
 
