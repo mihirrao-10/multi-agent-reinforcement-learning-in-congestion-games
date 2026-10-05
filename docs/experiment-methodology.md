@@ -59,7 +59,7 @@ Average physical latency is `C(x)/N`. There is no capacity, queue, spillback, co
 
 - `braess-open`: all routes are available; perceived cost equals physical cost.
 - `braess-closed`: the central edge and Shortcut action are removed.
-- `braess-tolled`: all routes are available; the variable edges have `tau_N(x) = 60(x - 1)/N` minutes.
+- `braess-tolled`: all routes are available; the variable edges have `tau_N(0) = 0` and `tau_N(x) = 60(x - 1)/N` minutes for `x >= 1`.
 
 A tolled learner's reward is negative physical route latency minus route toll payment. Tolls influence private incentives but remain transfers outside physical social cost.
 

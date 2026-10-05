@@ -2,7 +2,7 @@
 
 ## Multi-Agent Reinforcement Learning in Congestion Games
 
-[Live interactive essay](https://mihirrao-10.github.io/multi-agent-reinforcement-learning-in-congestion-games/) · [Experiment methodology](docs/experiment-methodology.md) · [Interview guide](docs/interview-guide.md) · [Course map](docs/course-map.md)
+[Live interactive essay](https://mihirrao-10.github.io/multi-agent-reinforcement-learning-in-congestion-games/) · [Experiment methodology](docs/experiment-methodology.md) · [Study guide](docs/study-guide.md)
 
 Each episode represents a new morning commute. Independent tabular learners separately choose complete routes from source `S` to destination `T`, experience only their own trip, and update only their own selected action. They do not meet, message, or exchange Q-values. Their shared congestion couples their rewards without creating communication between learners. With the central link closed, an even split gives every commuter a 90-minute trip. The zero-cost link is privately attractive, and the untolled game has an all-Shortcut equilibrium with a 120-minute trip. Removing the link restores the 90-minute outcome. Discrete marginal-cost tolls instead align equilibrium with the same physical optimum.
 
@@ -42,7 +42,7 @@ Reward is negative perceived route cost. Physical social cost is the sum of phys
 
 ## Exact default results
 
-All canonical arithmetic uses `Fraction`, including remove-then-add deviations. At `N = 100`:
+Exact game analysis uses `Fraction`, including remove-then-add deviations; learner Q-values, probabilities, and accumulated regret use NumPy floating-point arrays. At `N = 100`:
 
 | Scenario | Displayed pure Nash equilibrium | Physical social cost | Average latency | Physical optimum |
 | --- | --- | ---: | ---: | --- |
@@ -96,7 +96,8 @@ For every unilateral deviation, its exact change equals the deviating agent's ex
 The two variable edges receive the discrete marginal toll
 
 ```text
-tau_N(x) = (x - 1)[c_N(x) - c_N(x - 1)] = 60(x - 1)/N.
+tau_N(0) = 0
+tau_N(x) = (x - 1)[c_N(x) - c_N(x - 1)] = 60(x - 1)/N, for x >= 1.
 ```
 
 Then
@@ -161,7 +162,7 @@ Randomness is isolated with NumPy `SeedSequence` and PCG64. Stable ordering and 
 
 ## Installation and commands
 
-Python 3.12 or newer and Node 20 or newer are required.
+Python 3.12 or newer and Node 20.19+ or 22.12+ are required; the Node requirement comes from Vite 7.
 
 ```bash
 git clone https://github.com/mihirrao-10/multi-agent-reinforcement-learning-in-congestion-games.git

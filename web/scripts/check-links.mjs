@@ -15,16 +15,15 @@ if (missing.length > 0) {
 }
 const required = [
   "https://github.com/mihirrao-10/multi-agent-reinforcement-learning-in-congestion-games",
-  "blob/main/docs/interview-guide.md",
-  "blob/main/docs/course-map.md",
+  "blob/main/docs/study-guide.md#explaining-the-project",
+  "blob/main/docs/study-guide.md#theory-and-code-map",
 ];
 for (const link of required) {
   if (!html.includes(link)) throw new Error(`Required link is absent: ${link}`);
 }
 
 for (const path of [
-  "../docs/interview-guide.md",
-  "../docs/course-map.md",
+  "../docs/study-guide.md",
   "../docs/experiment-methodology.md",
   "public/data/manifest-v3.json",
   "public/data/population-100-v3.json",
